@@ -1,0 +1,5 @@
+-keep class com.example.finanzmanager.domain.** { *; }
+-keep class com.example.finanzmanager.data.database.entities.** { *; }
+-keepattributes Signature
+-keepattributes *Annotation*
+-dontwarn com.google.gson.**

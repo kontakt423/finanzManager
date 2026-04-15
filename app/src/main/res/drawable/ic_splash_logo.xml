@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="200dp"
+    android:height="200dp"
+    android:viewportWidth="200"
+    android:viewportHeight="200">
+
+    <!-- Background circle -->
+    <path
+        android:fillColor="#1E293B"
+        android:pathData="M100,20 A80,80 0 1,1 99.9,20 Z"/>
+
+    <!-- Blue accent ring -->
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#3B82F6"
+        android:strokeWidth="3"
+        android:pathData="M100,24 A76,76 0 1,1 99.9,24 Z"/>
+
+    <!-- Card body -->
+    <path
+        android:fillColor="#3B82F6"
+        android:pathData="M58,72 Q58,60 70,60 L130,60 Q142,60 142,72 L142,128 Q142,140 130,140 L70,140 Q58,140 58,128 Z"/>
+
+    <!-- Card dark stripe -->
+    <path
+        android:fillColor="#1D4ED8"
+        android:pathData="M58,84 L142,84 L142,96 L58,96 Z"/>
+
+    <!-- Upward chart line -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="4"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="@android:color/transparent"
+        android:pathData="M70,122 L84,110 L98,116 L126,98"/>
+
+    <!-- Arrow head -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="4"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="@android:color/transparent"
+        android:pathData="M118,95 L126,98 L123,106"/>
+
+    <!-- Euro € glyph -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M82,67 Q76,67 72,71 Q68,75 68,82 Q68,89 72,93 Q76,97 82,97 Q87,97 90,94.5 L92.5,97 Q89,100 82,100 Q74,100 69.5,95.5 Q65,91 65,82 Q65,73 69.5,68.5 Q74,64 82,64 Q89,64 92.5,66.5 L90,69.5 Q87,67 82,67 Z M64,80 L93,80 L93,84 L64,84 Z"/>
+
+</vector>
