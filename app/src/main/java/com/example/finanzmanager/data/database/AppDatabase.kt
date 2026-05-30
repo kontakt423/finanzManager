@@ -28,7 +28,7 @@ abstract class AppDatabase : RoomDatabase() {
     companion object {
         @Volatile private var INSTANCE: AppDatabase? = null
 
-        // Adds the isSettlement column (default 0 = false) to existing databases
+        // v1 → v2: adds isSettlement column
         val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(
@@ -45,6 +45,8 @@ abstract class AppDatabase : RoomDatabase() {
                     "finanzmanager_db"
                 )
                 .addMigrations(MIGRATION_1_2)
+                // Safety net: if migration fails for any reason, rebuild instead of crash
+                .fallbackToDestructiveMigration()
                 .build()
                 INSTANCE = instance
                 instance

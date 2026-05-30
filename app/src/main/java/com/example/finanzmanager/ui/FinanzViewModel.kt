@@ -88,11 +88,13 @@ class FinanzViewModel(
             repo.seedDefaultData()
         }
         viewModelScope.launch {
-            // Process standing orders once data is loaded
-            state.filter { it.isLoaded }.take(1).collect { s ->
-                val result = repo.processStandingOrders(s.accounts, s.transactions)
-                result?.let { (updatedAccounts, updatedTxs) ->
-                    _state.update { it.copy(accounts = updatedAccounts, transactions = updatedTxs) }
+            // Wait for initial data load, then process any overdue standing orders.
+            // processStandingOrders() writes directly to DB; Room Flows auto-update the UI.
+            state.filter { it.isLoaded }.take(1).collect {
+                try {
+                    repo.processStandingOrders()
+                } catch (e: Exception) {
+                    e.printStackTrace() // never crash the app over a standing-order error
                 }
             }
         }
