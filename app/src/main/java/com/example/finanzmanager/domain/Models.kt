@@ -74,3 +74,12 @@ data class Analysis(
     val totalSplitIncome: Double,    // all time - what you owe partner
     val totalSettlements: Double     // all time - already paid out
 )
+
+data class SavingsGoal(
+    val id: String,
+    val name: String,
+    val targetAmount: Double,
+    val savedAmount: Double,
+    val deadline: String = "",   // "" = no deadline, otherwise "yyyy-MM-dd"
+    val color: String = "#3b82f6"
+)

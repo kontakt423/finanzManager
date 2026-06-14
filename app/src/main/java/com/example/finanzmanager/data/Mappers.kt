@@ -41,3 +41,6 @@ fun StandingOrderEntity.toDomain() = StandingOrder(
 fun StandingOrder.toEntity() = StandingOrderEntity(
     id, type, amount, description, categoryId, accountId, toAccountId, isSplit, splitMode, interval, nextRun
 )
+
+fun SavingsGoalEntity.toDomain() = SavingsGoal(id, name, targetAmount, savedAmount, deadline, color)
+fun SavingsGoal.toEntity() = SavingsGoalEntity(id, name, targetAmount, savedAmount, deadline, color)

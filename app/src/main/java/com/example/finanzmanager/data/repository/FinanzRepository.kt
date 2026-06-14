@@ -29,6 +29,8 @@ class FinanzRepository(private val db: AppDatabase) {
         db.categoryDao().getAll().map { it.map { e -> e.toDomain() } }
     val standingOrders: Flow<List<StandingOrder>> =
         db.standingOrderDao().getAll().map { it.map { e -> e.toDomain() } }
+    val savingsGoals: Flow<List<SavingsGoal>> =
+        db.savingsGoalDao().getAll().map { it.map { e -> e.toDomain() } }
 
     // ── Accounts ─────────────────────────────────────────────────────────────
     suspend fun upsertAccount(account: Account) = db.accountDao().insert(account.toEntity())
@@ -57,8 +59,11 @@ class FinanzRepository(private val db: AppDatabase) {
     suspend fun getAllStandingOrdersSync(): List<StandingOrder> =
         db.standingOrderDao().getAllSync().map { it.toDomain() }
 
+    // ── Savings Goals ─────────────────────────────────────────────────────────
+    suspend fun upsertSavingsGoal(goal: SavingsGoal) = db.savingsGoalDao().insert(goal.toEntity())
+    suspend fun deleteSavingsGoal(id: String) = db.savingsGoalDao().deleteById(id)
+
     // ── Standing Order Processing ─────────────────────────────────────────────
-    // Returns true if any changes were made (so ViewModel knows to refresh from DB)
     suspend fun processStandingOrders(): Boolean = processingLock.withLock {
         val today = LocalDate.now().format(fmt)
         val orders = getAllStandingOrdersSync()
@@ -66,13 +71,11 @@ class FinanzRepository(private val db: AppDatabase) {
 
         for (order in orders) {
             var currentRun = order.nextRun
-            // Safety cap: never create more than 366 entries per order per run
             var iterations = 0
             while (currentRun <= today && iterations < 366) {
                 iterations++
                 hasChanges = true
 
-                // Build transaction
                 val tx = Transaction(
                     id = UUID.randomUUID().toString().replace("-", "").take(9),
                     type = order.type,
@@ -87,7 +90,6 @@ class FinanzRepository(private val db: AppDatabase) {
                 )
                 db.transactionDao().insert(tx.toEntity())
 
-                // Update account balance using FRESH DB read (avoids stale snapshot bug)
                 when (order.type) {
                     "expense" -> getAccountById(order.accountId)?.let { acc ->
                         updateAccountBalance(acc.id, round(acc.balance - order.amount))
@@ -110,7 +112,6 @@ class FinanzRepository(private val db: AppDatabase) {
                 currentRun = advanceDate(currentRun, order.interval)
             }
 
-            // Update nextRun in DB if we advanced it
             if (currentRun != order.nextRun) {
                 db.standingOrderDao().insert(order.copy(nextRun = currentRun).toEntity())
             }
@@ -150,11 +151,11 @@ class FinanzRepository(private val db: AppDatabase) {
     suspend fun exportToJson(
         accounts: List<Account>, transactions: List<Transaction>,
         categories: List<Category>, standingOrders: List<StandingOrder>,
-        settings: Map<String, Any>
+        savingsGoals: List<SavingsGoal>, settings: Map<String, Any>
     ): String = gson.toJson(mapOf(
         "accounts" to accounts, "transactions" to transactions,
         "categories" to categories, "standingOrders" to standingOrders,
-        "settings" to settings
+        "savingsGoals" to savingsGoals, "settings" to settings
     ))
 
     suspend fun importFromJson(json: String): Boolean {
@@ -169,22 +170,23 @@ class FinanzRepository(private val db: AppDatabase) {
                     TypeToken.getParameterized(List::class.java, clazz).type) ?: emptyList()
             }
 
-            // Parse everything before touching the DB — if parsing fails the DB stays intact
-            val accounts      = parseList("accounts",       Account::class.java)
-            val transactions  = parseList("transactions",   Transaction::class.java)
-            val categories    = parseList("categories",     Category::class.java)
+            val accounts       = parseList("accounts",      Account::class.java)
+            val transactions   = parseList("transactions",  Transaction::class.java)
+            val categories     = parseList("categories",    Category::class.java)
             val standingOrders = parseList("standingOrders", StandingOrder::class.java)
+            val savingsGoals   = parseList("savingsGoals",  SavingsGoal::class.java)
 
-            // Atomically clear + re-insert so a failure mid-way never leaves an empty DB
             db.withTransaction {
                 db.accountDao().deleteAll()
                 db.transactionDao().deleteAll()
                 db.categoryDao().deleteAll()
                 db.standingOrderDao().deleteAll()
+                db.savingsGoalDao().deleteAll()
                 accounts.forEach       { db.accountDao().insert(it.toEntity()) }
                 transactions.forEach   { db.transactionDao().insert(it.toEntity()) }
                 categories.forEach     { db.categoryDao().insert(it.toEntity()) }
                 standingOrders.forEach { db.standingOrderDao().insert(it.toEntity()) }
+                savingsGoals.forEach   { db.savingsGoalDao().insert(it.toEntity()) }
             }
             true
         } catch (e: Exception) {
@@ -195,8 +197,6 @@ class FinanzRepository(private val db: AppDatabase) {
 
     companion object {
         fun round(v: Double): Double = Math.round(v * 100.0) / 100.0
-        // Process-level lock — shared across all FinanzRepository instances (Worker + ViewModel)
-        // Prevents duplicate transactions when WorkManager and the ViewModel startup both fire together
         private val processingLock = Mutex()
     }
 }

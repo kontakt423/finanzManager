@@ -23,6 +23,7 @@ data class UiState(
     val transactions: List<Transaction> = emptyList(),
     val categories: List<Category> = emptyList(),
     val standingOrders: List<StandingOrder> = emptyList(),
+    val savingsGoals: List<SavingsGoal> = emptyList(),
     val isDarkMode: Boolean = true,
     val splitPotEnabled: Boolean = true,
     val countFullSplitIncome: Boolean = false,
@@ -82,6 +83,11 @@ class FinanzViewModel(
                     countFullSplitIncome = full,
                     splitPotStartDate = startDate
                 ) }
+            }
+        }
+        viewModelScope.launch {
+            repo.savingsGoals.collect { goals ->
+                _state.update { it.copy(savingsGoals = goals) }
             }
         }
         viewModelScope.launch {
@@ -419,6 +425,21 @@ class FinanzViewModel(
 
     fun deleteStandingOrder(id: String) = viewModelScope.launch { repo.deleteStandingOrder(id) }
 
+    // ---- Savings Goals CRUD ----
+    fun saveSavingsGoal(
+        id: String?, name: String, targetAmount: Double,
+        savedAmount: Double, deadline: String, color: String
+    ) = viewModelScope.launch {
+        val goal = SavingsGoal(
+            id = id ?: UUID.randomUUID().toString().replace("-", "").take(9),
+            name = name, targetAmount = targetAmount, savedAmount = savedAmount,
+            deadline = deadline, color = color
+        )
+        repo.upsertSavingsGoal(goal)
+    }
+
+    fun deleteSavingsGoal(id: String) = viewModelScope.launch { repo.deleteSavingsGoal(id) }
+
     // ---- Export / Import ----
     fun exportData(context: Context, onResult: (Uri?) -> Unit) = viewModelScope.launch {
         val s = _state.value
@@ -427,7 +448,7 @@ class FinanzViewModel(
             "splitPotEnabled" to s.splitPotEnabled,
             "countFullSplitIncome" to s.countFullSplitIncome
         )
-        val json = repo.exportToJson(s.accounts, s.transactions, s.categories, s.standingOrders, settingsMap)
+        val json = repo.exportToJson(s.accounts, s.transactions, s.categories, s.standingOrders, s.savingsGoals, settingsMap)
         try {
             val fileName = "FinanzBackup_${today()}.json"
             val file = java.io.File(context.cacheDir, fileName)

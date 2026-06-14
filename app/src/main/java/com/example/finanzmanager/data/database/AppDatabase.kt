@@ -14,9 +14,10 @@ import com.example.finanzmanager.data.database.entities.*
         AccountEntity::class,
         TransactionEntity::class,
         CategoryEntity::class,
-        StandingOrderEntity::class
+        StandingOrderEntity::class,
+        SavingsGoalEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -24,16 +25,31 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun transactionDao(): TransactionDao
     abstract fun categoryDao(): CategoryDao
     abstract fun standingOrderDao(): StandingOrderDao
+    abstract fun savingsGoalDao(): SavingsGoalDao
 
     companion object {
         @Volatile private var INSTANCE: AppDatabase? = null
 
-        // v1 → v2: adds isSettlement column
         val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(
                     "ALTER TABLE transactions ADD COLUMN isSettlement INTEGER NOT NULL DEFAULT 0"
                 )
+            }
+        }
+
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS savings_goals (
+                        id TEXT NOT NULL PRIMARY KEY,
+                        name TEXT NOT NULL,
+                        targetAmount REAL NOT NULL,
+                        savedAmount REAL NOT NULL,
+                        deadline TEXT NOT NULL,
+                        color TEXT NOT NULL
+                    )
+                """.trimIndent())
             }
         }
 
@@ -44,8 +60,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "finanzmanager_db"
                 )
-                .addMigrations(MIGRATION_1_2)
-                // Safety net: if migration fails for any reason, rebuild instead of crash
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .fallbackToDestructiveMigration()
                 .build()
                 INSTANCE = instance

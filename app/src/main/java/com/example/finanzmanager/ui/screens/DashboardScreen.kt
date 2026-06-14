@@ -37,6 +37,9 @@ fun DashboardScreen(
     onEditAccount: (Account) -> Unit,
     onInvestmentDetail: (Account) -> Unit,
     onSplitPotClick: () -> Unit,
+    onSearch: () -> Unit = {},
+    onAddGoal: () -> Unit = {},
+    onEditGoal: (com.example.finanzmanager.domain.SavingsGoal) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val filteredTxs = vm.filteredTransactions()
@@ -82,13 +85,22 @@ fun DashboardScreen(
                         fontSize = 11.sp
                     )
                 }
-                FilledIconButton(
-                    onClick = onAddTransaction,
-                    colors = IconButtonDefaults.filledIconButtonColors(
-                        containerColor = MaterialTheme.colorScheme.primary
-                    )
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = "Hinzufügen")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    IconButton(onClick = onSearch) {
+                        Icon(
+                            Icons.Default.Search,
+                            contentDescription = "Suchen",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    FilledIconButton(
+                        onClick = onAddTransaction,
+                        colors = IconButtonDefaults.filledIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.primary
+                        )
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = "Hinzufügen")
+                    }
                 }
             }
         }
@@ -295,6 +307,59 @@ fun DashboardScreen(
             }
         }
 
+        // Savings Goals
+        if (state.savingsGoals.isNotEmpty()) {
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "SPARZIELE",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 9.sp,
+                        letterSpacing = 1.5.sp
+                    )
+                    Icon(
+                        Icons.Default.Add,
+                        contentDescription = "Ziel hinzufügen",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp).clickable(onClick = onAddGoal)
+                    )
+                }
+            }
+            items(state.savingsGoals) { goal ->
+                SavingsGoalCard(goal = goal, onClick = { onEditGoal(goal) })
+            }
+        } else {
+            item {
+                OutlinedCard(
+                    onClick = onAddGoal,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Icon(Icons.Default.Savings, contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Sparziele anlegen", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            Text("Verfolge Fortschritt zu deinen Zielen", fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Icon(Icons.Default.ChevronRight, contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
+                    }
+                }
+            }
+        }
+
         // Recent Transactions
         item {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -397,6 +462,83 @@ fun SectionHeader(title: String, onAdd: (() -> Unit)?) {
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(20.dp).clickable(onClick = onAdd)
             )
+        }
+    }
+}
+
+@Composable
+fun SavingsGoalCard(goal: com.example.finanzmanager.domain.SavingsGoal, onClick: () -> Unit) {
+    val progress = if (goal.targetAmount > 0)
+        (goal.savedAmount / goal.targetAmount).toFloat().coerceIn(0f, 1f) else 0f
+    val goalColor = com.example.finanzmanager.ui.components.parseHexColor(goal.color)
+    val isComplete = progress >= 1f
+
+    Card(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(goalColor.copy(alpha = 0.15f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            if (isComplete) Icons.Default.CheckCircle else Icons.Default.Savings,
+                            contentDescription = null,
+                            tint = goalColor,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    Column {
+                        Text(goal.name, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        if (goal.deadline.isNotEmpty()) {
+                            val p = goal.deadline.split("-")
+                            Text("Bis ${p[2]}.${p[1]}.${p[0]}",
+                                fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        "${(progress * 100).toInt()}%",
+                        fontWeight = FontWeight.Black,
+                        fontSize = 16.sp,
+                        color = goalColor
+                    )
+                    Text(
+                        com.example.finanzmanager.ui.components.formatCurrency(goal.savedAmount),
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            LinearProgressIndicator(
+                progress = { progress },
+                modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
+                color = goalColor,
+                trackColor = goalColor.copy(alpha = 0.15f)
+            )
+            Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) {
+                Text(
+                    com.example.finanzmanager.ui.components.formatCurrency(goal.savedAmount),
+                    fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    "Ziel: ${com.example.finanzmanager.ui.components.formatCurrency(goal.targetAmount)}",
+                    fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }
