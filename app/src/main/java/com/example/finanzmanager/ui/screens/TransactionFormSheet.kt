@@ -1,5 +1,7 @@
 package com.example.finanzmanager.ui.screens
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
@@ -8,17 +10,12 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.filled.CalendarMonth
-import androidx.compose.material3.DatePicker
-import androidx.compose.material3.DatePickerDialog
-import androidx.compose.material3.rememberDatePickerState
-import java.time.Instant
-import java.time.ZoneId
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -33,6 +30,10 @@ import com.example.finanzmanager.ui.FinanzViewModel
 import com.example.finanzmanager.ui.UiState
 import com.example.finanzmanager.ui.today
 import com.example.finanzmanager.ui.components.formatCurrency
+import com.example.finanzmanager.ui.theme.AccentGreen
+import com.example.finanzmanager.ui.theme.AccentRed
+import java.time.Instant
+import java.time.ZoneId
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -44,19 +45,25 @@ fun TransactionFormSheet(
     vm: FinanzViewModel,
     onDismiss: () -> Unit
 ) {
-    var isOrder by remember { mutableStateOf(isStandingOrder || initialOrder != null) }
-    var txType by remember { mutableStateOf(initialTx?.type ?: initialOrder?.type ?: "expense") }
-    var amount by remember { mutableStateOf((initialTx?.amount ?: initialOrder?.amount ?: 0.0).let { if (it == 0.0) "" else it.toString() }) }
-    var description by remember { mutableStateOf(initialTx?.description ?: initialOrder?.description ?: "") }
-    var categoryId by remember { mutableStateOf(initialTx?.categoryId ?: initialOrder?.categoryId ?: state.categories.firstOrNull()?.id ?: "") }
-    var accountId by remember { mutableStateOf(initialTx?.accountId ?: initialOrder?.accountId ?: state.accounts.firstOrNull()?.id ?: "") }
-    var toAccountId by remember { mutableStateOf(initialTx?.toAccountId ?: initialOrder?.toAccountId ?: "") }
-    var isSplit by remember { mutableStateOf(initialTx?.isSplit ?: initialOrder?.isSplit ?: false) }
+    var isOrder      by remember { mutableStateOf(isStandingOrder || initialOrder != null) }
+    var txType       by remember { mutableStateOf(initialTx?.type ?: initialOrder?.type ?: "expense") }
+    var amount       by remember { mutableStateOf((initialTx?.amount ?: initialOrder?.amount ?: 0.0).let { if (it == 0.0) "" else it.toString() }) }
+    var description  by remember { mutableStateOf(initialTx?.description ?: initialOrder?.description ?: "") }
+    var categoryId   by remember { mutableStateOf(initialTx?.categoryId ?: initialOrder?.categoryId ?: state.categories.firstOrNull()?.id ?: "") }
+    var accountId    by remember { mutableStateOf(initialTx?.accountId ?: initialOrder?.accountId ?: state.accounts.firstOrNull()?.id ?: "") }
+    var toAccountId  by remember { mutableStateOf(initialTx?.toAccountId ?: initialOrder?.toAccountId ?: "") }
+    var isSplit      by remember { mutableStateOf(initialTx?.isSplit ?: initialOrder?.isSplit ?: false) }
     var isSettlement by remember { mutableStateOf(initialTx?.isSettlement ?: false) }
-    var splitMode by remember { mutableStateOf(initialTx?.splitMode ?: initialOrder?.splitMode ?: "half") }
-    var date by remember { mutableStateOf(initialTx?.date ?: today()) }
-    var interval by remember { mutableStateOf(initialOrder?.interval ?: "monthly") }
-    var nextRun by remember { mutableStateOf(initialOrder?.nextRun ?: today()) }
+    var splitMode    by remember { mutableStateOf(initialTx?.splitMode ?: initialOrder?.splitMode ?: "half") }
+    var date         by remember { mutableStateOf(initialTx?.date ?: today()) }
+    var interval     by remember { mutableStateOf(initialOrder?.interval ?: "monthly") }
+    var nextRun      by remember { mutableStateOf(initialOrder?.nextRun ?: today()) }
+
+    val typeColor = when (txType) {
+        "income"   -> Color(0xFF059669)
+        "transfer" -> Color(0xFF1D4ED8)
+        else       -> Color(0xFFDC2626)
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -66,30 +73,45 @@ fun TransactionFormSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .imePadding()   // prevents keyboard from pushing content off-screen
                 .padding(horizontal = 20.dp)
                 .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            // Header
+            // ── Header ──────────────────────────────────────────────────
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Buchung", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black)
+                Column {
+                    Text(
+                        if (isOrder) "Dauerauftrag" else "Buchung",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Black
+                    )
+                    Text(
+                        if (initialTx != null || initialOrder != null) "Bearbeiten" else "Neu anlegen",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
                 if (initialTx != null || initialOrder != null) {
                     IconButton(onClick = {
                         initialTx?.id?.let { vm.deleteTransaction(it) }
                         initialOrder?.id?.let { vm.deleteStandingOrder(it) }
                         onDismiss()
                     }) {
-                        Icon(Icons.Default.Delete, contentDescription = "Löschen",
-                            tint = MaterialTheme.colorScheme.error)
+                        Icon(
+                            Icons.Default.Delete,
+                            contentDescription = "Löschen",
+                            tint = MaterialTheme.colorScheme.error
+                        )
                     }
                 }
             }
 
-            // One-time vs Standing Order toggle
+            // ── Einmalig / Dauerauftrag ──────────────────────────────────
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -98,22 +120,31 @@ fun TransactionFormSheet(
                     .padding(4.dp)
             ) {
                 listOf(false to "Einmalig", true to "Dauerauftrag").forEach { (isOrderVal, label) ->
+                    val bg by animateColorAsState(
+                        if (isOrder == isOrderVal) MaterialTheme.colorScheme.primary else Color.Transparent,
+                        tween(200), label = "orderBg"
+                    )
                     Box(
                         modifier = Modifier
                             .weight(1f)
                             .clip(RoundedCornerShape(8.dp))
-                            .background(if (isOrder == isOrderVal) MaterialTheme.colorScheme.primary else Color.Transparent)
+                            .background(bg)
                             .clickable { isOrder = isOrderVal }
                             .padding(vertical = 10.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(label, fontWeight = FontWeight.Bold, fontSize = 12.sp,
-                            color = if (isOrder == isOrderVal) Color.White else MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(
+                            label,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp,
+                            color = if (isOrder == isOrderVal) Color.White
+                                    else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             }
 
-            // Transaction type selector
+            // ── Typ: Ausgabe / Einnahme / Transfer ───────────────────────
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -121,13 +152,20 @@ fun TransactionFormSheet(
                     .background(MaterialTheme.colorScheme.surfaceVariant)
                     .padding(4.dp)
             ) {
-                listOf("expense" to "Ausgabe", "income" to "Einnahme", "transfer" to "Transfer").forEach { (type, label) ->
-                    val bg = when {
-                        txType == type && type == "income" -> Color(0xFF059669)
-                        txType == type && type == "transfer" -> Color(0xFF1D4ED8)
-                        txType == type -> Color(0xFFDC2626)
-                        else -> Color.Transparent
+                listOf(
+                    "expense"  to "Ausgabe",
+                    "income"   to "Einnahme",
+                    "transfer" to "Transfer"
+                ).forEach { (type, label) ->
+                    val color = when (type) {
+                        "income"   -> Color(0xFF059669)
+                        "transfer" -> Color(0xFF1D4ED8)
+                        else       -> Color(0xFFDC2626)
                     }
+                    val bg by animateColorAsState(
+                        if (txType == type) color else Color.Transparent,
+                        tween(200), label = "typeBg"
+                    )
                     Box(
                         modifier = Modifier
                             .weight(1f)
@@ -137,57 +175,78 @@ fun TransactionFormSheet(
                             .padding(vertical = 10.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(label, fontWeight = FontWeight.Bold, fontSize = 11.sp,
-                            color = if (txType == type) Color.White else MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(
+                            label,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp,
+                            color = if (txType == type) Color.White
+                                    else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             }
 
-            // Amount
-            OutlinedTextField(
-                value = amount,
-                onValueChange = { amount = it },
-                modifier = Modifier.fillMaxWidth(),
-                textStyle = MaterialTheme.typography.headlineMedium.copy(
-                    fontWeight = FontWeight.Black, textAlign = TextAlign.Center),
-                placeholder = { Text("0,00 €", textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth(), style = MaterialTheme.typography.headlineMedium) },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                shape = RoundedCornerShape(16.dp),
-                singleLine = true
-            )
-            // Live parsed value preview - helps user see if comma/dot was accepted
+            // ── Betrag ───────────────────────────────────────────────────
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(typeColor.copy(alpha = 0.07f))
+                    .border(1.5.dp, typeColor.copy(alpha = 0.25f), RoundedCornerShape(20.dp))
+                    .padding(horizontal = 16.dp, vertical = 6.dp)
+            ) {
+                OutlinedTextField(
+                    value = amount,
+                    onValueChange = { amount = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    textStyle = MaterialTheme.typography.headlineMedium.copy(
+                        fontWeight = FontWeight.Black,
+                        textAlign = TextAlign.Center,
+                        color = typeColor
+                    ),
+                    placeholder = {
+                        Text(
+                            "0,00 €",
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth(),
+                            style = MaterialTheme.typography.headlineMedium.copy(
+                                color = typeColor.copy(alpha = 0.3f)
+                            )
+                        )
+                    },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Color.Transparent,
+                        unfocusedBorderColor = Color.Transparent
+                    )
+                )
+            }
             val parsedAmt = amount.parseLocalDouble()
             if (amount.isNotBlank()) {
                 Text(
-                    text = if (parsedAmt != null)
-                        "✓ ${formatCurrency(parsedAmt)}"
-                    else
-                        "⚠ Ungültiger Betrag – bitte Komma oder Punkt verwenden",
+                    text = if (parsedAmt != null) "✓ ${formatCurrency(parsedAmt)}"
+                           else "⚠ Ungültiger Betrag – Komma oder Punkt verwenden",
                     fontSize = 11.sp,
-                    color = if (parsedAmt != null)
-                        androidx.compose.ui.graphics.Color(0xFF10B981)
-                    else
-                        androidx.compose.ui.graphics.Color(0xFFEF4444),
+                    color = if (parsedAmt != null) AccentGreen else AccentRed,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.fillMaxWidth(),
                     textAlign = TextAlign.Center
                 )
             }
 
-            // Description
+            // ── Beschreibung ─────────────────────────────────────────────
             OutlinedTextField(
                 value = description,
                 onValueChange = { description = it },
                 label = { Text("Beschreibung") },
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(14.dp),
                 singleLine = true
             )
 
-            // Account & Category selectors
+            // ── Konto & Kategorie ─────────────────────────────────────────
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                // Account
                 ExposedDropdownSelector(
                     label = "Konto",
                     options = state.accounts.map { it.id to it.name },
@@ -195,7 +254,6 @@ fun TransactionFormSheet(
                     onSelect = { accountId = it },
                     modifier = Modifier.weight(1f)
                 )
-                // Category or To-Account
                 if (txType == "transfer") {
                     ExposedDropdownSelector(
                         label = "Zielkonto",
@@ -218,18 +276,22 @@ fun TransactionFormSheet(
                 }
             }
 
-            // Date / Interval
+            // ── Datum / Intervall ─────────────────────────────────────────
             if (isOrder) {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     ExposedDropdownSelector(
                         label = "Intervall",
-                        options = listOf("weekly" to "Wöchentlich", "monthly" to "Monatlich", "yearly" to "Jährlich"),
+                        options = listOf(
+                            "weekly"  to "Wöchentlich",
+                            "monthly" to "Monatlich",
+                            "yearly"  to "Jährlich"
+                        ),
                         selected = interval,
                         onSelect = { interval = it },
                         modifier = Modifier.weight(1f)
                     )
                     DatePickerButton(
-                        label = "Erste Ausführung",
+                        label = "Start",
                         value = nextRun,
                         onDateSelected = { nextRun = it },
                         modifier = Modifier.weight(1f)
@@ -243,110 +305,55 @@ fun TransactionFormSheet(
                 )
             }
 
-            // Split toggle (only for non-transfer)
+            // ── Split-Topf ────────────────────────────────────────────────
             if (txType != "transfer" && !isOrder) {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { isSplit = !isSplit },
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = if (isSplit) Color(0xFF5B21B6).copy(alpha = 0.1f)
-                        else MaterialTheme.colorScheme.surfaceVariant
-                    )
-                ) {
-                    Row(
-                        modifier = Modifier.padding(14.dp).fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.CallSplit, contentDescription = null,
-                                tint = if (isSplit) Color(0xFF7C3AED) else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(10.dp))
-                            Text("Split-Topf", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                        }
-                        Checkbox(
-                            checked = isSplit,
-                            onCheckedChange = { isSplit = it },
-                            colors = CheckboxDefaults.colors(checkedColor = Color(0xFF7C3AED))
-                        )
-                    }
-                }
-
+                SwitchRow(
+                    icon = Icons.Default.CallSplit,
+                    title = "Split-Topf",
+                    checked = isSplit,
+                    activeColor = Color(0xFF7C3AED),
+                    onToggle = { isSplit = it }
+                )
                 if (isSplit) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         listOf("half" to "50% Split", "partner" to "100% Partner").forEach { (mode, label) ->
-                            OutlinedButton(
-                                onClick = { splitMode = mode },
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.outlinedButtonColors(
-                                    containerColor = if (splitMode == mode) Color(0xFF5B21B6) else Color.Transparent,
-                                    contentColor = if (splitMode == mode) Color.White else Color(0xFF7C3AED)
-                                ),
-                                border = null
+                            val selected = splitMode == mode
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(
+                                        if (selected) Color(0xFF5B21B6) else MaterialTheme.colorScheme.surfaceVariant
+                                    )
+                                    .clickable { splitMode = mode }
+                                    .padding(vertical = 12.dp),
+                                contentAlignment = Alignment.Center
                             ) {
-                                Text(label, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                Text(
+                                    label,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (selected) Color.White else Color(0xFF7C3AED)
+                                )
                             }
                         }
                     }
                 }
             }
 
-            // Partnerausgleich toggle (expense only, not for standing orders)
+            // ── Partnerausgleich ──────────────────────────────────────────
             if (txType == "expense" && !isOrder) {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { isSettlement = !isSettlement },
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = if (isSettlement)
-                            androidx.compose.ui.graphics.Color(0xFF1D4ED8).copy(alpha = 0.12f)
-                        else MaterialTheme.colorScheme.surfaceVariant
-                    )
-                ) {
-                    Row(
-                        modifier = Modifier.padding(14.dp).fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                Icons.Default.Handshake,
-                                contentDescription = null,
-                                tint = if (isSettlement)
-                                    androidx.compose.ui.graphics.Color(0xFF3B82F6)
-                                else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(Modifier.width(10.dp))
-                            Column {
-                                Text(
-                                    "Partnerausgleich",
-                                    fontWeight = FontWeight.Bold, fontSize = 14.sp
-                                )
-                                Text(
-                                    "Hebt Split-Topf Reservierung auf",
-                                    fontSize = 10.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                        Checkbox(
-                            checked = isSettlement,
-                            onCheckedChange = { isSettlement = it },
-                            colors = CheckboxDefaults.colors(
-                                checkedColor = androidx.compose.ui.graphics.Color(0xFF3B82F6)
-                            )
-                        )
-                    }
-                }
+                SwitchRow(
+                    icon = Icons.Default.Handshake,
+                    title = "Partnerausgleich",
+                    subtitle = "Hebt Split-Topf Reservierung auf",
+                    checked = isSettlement,
+                    activeColor = Color(0xFF3B82F6),
+                    onToggle = { isSettlement = it }
+                )
             }
 
-            // Save button
+            // ── Speichern ─────────────────────────────────────────────────
             Button(
                 onClick = {
                     val amt = amount.parseLocalDouble() ?: return@Button
@@ -355,7 +362,8 @@ fun TransactionFormSheet(
                             id = initialOrder?.id, type = txType, amount = amt,
                             description = description, categoryId = categoryId,
                             accountId = accountId, toAccountId = toAccountId.ifBlank { null },
-                            isSplit = isSplit, splitMode = splitMode, interval = interval, nextRun = nextRun
+                            isSplit = isSplit, splitMode = splitMode,
+                            interval = interval, nextRun = nextRun
                         )
                     } else {
                         vm.saveTransaction(
@@ -368,26 +376,70 @@ fun TransactionFormSheet(
                     }
                     onDismiss()
                 },
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-                shape = RoundedCornerShape(18.dp)
+                modifier = Modifier.fillMaxWidth().height(54.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = typeColor)
             ) {
-                Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(18.dp))
+                Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("Speichern", fontWeight = FontWeight.Black, fontSize = 14.sp)
+                Text("Speichern", fontWeight = FontWeight.Black, fontSize = 15.sp)
             }
 
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(16.dp))
         }
     }
 }
 
+/** Compact toggle row used for Split-Topf and Partnerausgleich */
+@Composable
+private fun SwitchRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    subtitle: String? = null,
+    checked: Boolean,
+    activeColor: Color,
+    onToggle: (Boolean) -> Unit
+) {
+    val bg by animateColorAsState(
+        if (checked) activeColor.copy(alpha = 0.09f) else MaterialTheme.colorScheme.surfaceVariant,
+        tween(200), label = "switchBg"
+    )
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(bg)
+            .clickable { onToggle(!checked) }
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+            Icon(
+                icon, contentDescription = null,
+                tint = if (checked) activeColor else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(Modifier.width(10.dp))
+            Column {
+                Text(title, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                if (subtitle != null) {
+                    Text(subtitle, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+        Switch(
+            checked = checked,
+            onCheckedChange = onToggle,
+            colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = activeColor)
+        )
+    }
+}
 
-// Parses "1.500,00" (DE), "1,500.00" (EN), "1500,5" and "1500.5" all correctly
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
 fun String.parseLocalDouble(): Double? {
-    val cleaned = this.trim()
-        .replace(" ", "")
-        .replace(" ", "") // non-breaking space
-    // Detect format: if both . and , exist, the last one is decimal separator
+    val cleaned = this.trim().replace(" ", "").replace(" ", "")
     val lastDot   = cleaned.lastIndexOf('.')
     val lastComma = cleaned.lastIndexOf(',')
     val normalized = when {
@@ -396,6 +448,13 @@ fun String.parseLocalDouble(): Double? {
         else                 -> cleaned.replace(",", ".")
     }
     return normalized.toDoubleOrNull()
+}
+
+private fun formatDisplayDate(isoDate: String): String {
+    return try {
+        val parts = isoDate.split("-")
+        "${parts[2]}.${parts[1]}.${parts[0]}"
+    } catch (e: Exception) { isoDate }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -409,41 +468,32 @@ fun DatePickerButton(
     var showDialog by remember { mutableStateOf(false) }
     val fmt = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd")
 
-    // Convert stored "yyyy-MM-dd" string to millis for the picker
     val initialMillis = remember(value) {
         try {
             java.time.LocalDate.parse(value, fmt)
                 .atStartOfDay(ZoneId.of("UTC"))
                 .toInstant().toEpochMilli()
-        } catch (e: Exception) {
-            System.currentTimeMillis()
-        }
+        } catch (e: Exception) { System.currentTimeMillis() }
     }
 
     OutlinedButton(
         onClick = { showDialog = true },
         modifier = modifier.fillMaxWidth().height(56.dp),
         shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(
-            1.dp, MaterialTheme.colorScheme.outline
-        )
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
     ) {
         Icon(
             Icons.Default.CalendarMonth,
             contentDescription = null,
-            modifier = Modifier.size(16.dp),
+            modifier = Modifier.size(15.dp),
             tint = MaterialTheme.colorScheme.primary
         )
         Spacer(Modifier.width(6.dp))
-        Column(horizontalAlignment = Alignment.Start) {
+        Column(horizontalAlignment = Alignment.Start, modifier = Modifier.fillMaxWidth()) {
+            Text(label, fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 10.sp)
             Text(
-                label,
-                fontSize = 9.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Text(
-                value,
-                fontSize = 12.sp,
+                formatDisplayDate(value),   // shows "14.06.2026" instead of "2026-06-14"
+                fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface
             )
@@ -457,10 +507,9 @@ fun DatePickerButton(
             confirmButton = {
                 TextButton(onClick = {
                     pickerState.selectedDateMillis?.let { millis ->
-                        val date = Instant.ofEpochMilli(millis)
-                            .atZone(ZoneId.of("UTC"))
-                            .toLocalDate()
-                        onDateSelected(date.format(fmt))
+                        val picked = Instant.ofEpochMilli(millis)
+                            .atZone(ZoneId.of("UTC")).toLocalDate()
+                        onDateSelected(picked.format(fmt))
                     }
                     showDialog = false
                 }) { Text("OK") }
@@ -468,9 +517,7 @@ fun DatePickerButton(
             dismissButton = {
                 TextButton(onClick = { showDialog = false }) { Text("Abbrechen") }
             }
-        ) {
-            DatePicker(state = pickerState)
-        }
+        ) { DatePicker(state = pickerState) }
     }
 }
 
@@ -505,10 +552,7 @@ fun ExposedDropdownSelector(
             options.forEach { (id, name) ->
                 DropdownMenuItem(
                     text = { Text(name, fontSize = 13.sp) },
-                    onClick = {
-                        onSelect(id)
-                        expanded = false
-                    }
+                    onClick = { onSelect(id); expanded = false }
                 )
             }
         }
