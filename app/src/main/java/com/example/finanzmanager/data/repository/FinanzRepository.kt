@@ -9,6 +9,8 @@ import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.UUID
@@ -57,7 +59,7 @@ class FinanzRepository(private val db: AppDatabase) {
 
     // ── Standing Order Processing ─────────────────────────────────────────────
     // Returns true if any changes were made (so ViewModel knows to refresh from DB)
-    suspend fun processStandingOrders(): Boolean {
+    suspend fun processStandingOrders(): Boolean = processingLock.withLock {
         val today = LocalDate.now().format(fmt)
         val orders = getAllStandingOrdersSync()
         var hasChanges = false
@@ -193,5 +195,8 @@ class FinanzRepository(private val db: AppDatabase) {
 
     companion object {
         fun round(v: Double): Double = Math.round(v * 100.0) / 100.0
+        // Process-level lock — shared across all FinanzRepository instances (Worker + ViewModel)
+        // Prevents duplicate transactions when WorkManager and the ViewModel startup both fire together
+        private val processingLock = Mutex()
     }
 }
