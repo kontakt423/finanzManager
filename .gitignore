@@ -8,9 +8,6 @@ app/build/
 *.iml
 local.properties
 
-# Gradle wrapper jar (downloaded automatically by Android Studio)
-gradle/wrapper/gradle-wrapper.jar
-
 # OS
 .DS_Store
 Thumbs.db
