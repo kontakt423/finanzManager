@@ -1,5 +1,6 @@
 package com.example.finanzmanager.data.repository
 
+import androidx.room.withTransaction
 import com.example.finanzmanager.data.*
 import com.example.finanzmanager.data.database.AppDatabase
 import com.example.finanzmanager.domain.*
@@ -159,11 +160,6 @@ class FinanzRepository(private val db: AppDatabase) {
             val mapType = object : TypeToken<Map<String, Any>>() {}.type
             val data: Map<String, Any> = gson.fromJson(json, mapType)
 
-            db.accountDao().deleteAll()
-            db.transactionDao().deleteAll()
-            db.categoryDao().deleteAll()
-            db.standingOrderDao().deleteAll()
-
             fun <T> parseList(key: String, clazz: Class<T>): List<T> {
                 val raw = data[key] ?: return emptyList()
                 val rawJson = gson.toJson(raw)
@@ -171,14 +167,23 @@ class FinanzRepository(private val db: AppDatabase) {
                     TypeToken.getParameterized(List::class.java, clazz).type) ?: emptyList()
             }
 
-            parseList("accounts",       Account::class.java)
-                .forEach { db.accountDao().insert(it.toEntity()) }
-            parseList("transactions",   Transaction::class.java)
-                .forEach { db.transactionDao().insert(it.toEntity()) }
-            parseList("categories",     Category::class.java)
-                .forEach { db.categoryDao().insert(it.toEntity()) }
-            parseList("standingOrders", StandingOrder::class.java)
-                .forEach { db.standingOrderDao().insert(it.toEntity()) }
+            // Parse everything before touching the DB — if parsing fails the DB stays intact
+            val accounts      = parseList("accounts",       Account::class.java)
+            val transactions  = parseList("transactions",   Transaction::class.java)
+            val categories    = parseList("categories",     Category::class.java)
+            val standingOrders = parseList("standingOrders", StandingOrder::class.java)
+
+            // Atomically clear + re-insert so a failure mid-way never leaves an empty DB
+            db.withTransaction {
+                db.accountDao().deleteAll()
+                db.transactionDao().deleteAll()
+                db.categoryDao().deleteAll()
+                db.standingOrderDao().deleteAll()
+                accounts.forEach       { db.accountDao().insert(it.toEntity()) }
+                transactions.forEach   { db.transactionDao().insert(it.toEntity()) }
+                categories.forEach     { db.categoryDao().insert(it.toEntity()) }
+                standingOrders.forEach { db.standingOrderDao().insert(it.toEntity()) }
+            }
             true
         } catch (e: Exception) {
             e.printStackTrace()

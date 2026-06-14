@@ -1,15 +1,17 @@
 package com.example.finanzmanager.ui.components
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -41,12 +43,12 @@ fun parseHexColor(hex: String): Color {
 }
 
 fun accountIcon(iconName: String): ImageVector = when (iconName) {
-    "bank" -> Icons.Default.AccountBalance
-    "wallet" -> Icons.Default.AccountBalanceWallet
-    "stock" -> Icons.Default.TrendingUp
-    "card" -> Icons.Default.CreditCard
+    "bank"    -> Icons.Default.AccountBalance
+    "wallet"  -> Icons.Default.AccountBalanceWallet
+    "stock"   -> Icons.Default.TrendingUp
+    "card"    -> Icons.Default.CreditCard
     "savings" -> Icons.Default.Savings
-    else -> Icons.Default.AccountBalance
+    else      -> Icons.Default.AccountBalance
 }
 
 @Composable
@@ -65,17 +67,27 @@ fun FilterBar(
     ) {
         FilterType.entries.forEach { type ->
             val label = when (type) {
-                FilterType.TODAY -> "Heute"
-                FilterType.WEEK -> "Woche"
-                FilterType.MONTH -> "Monat"
+                FilterType.TODAY  -> "Heute"
+                FilterType.WEEK   -> "Woche"
+                FilterType.MONTH  -> "Monat"
                 FilterType.CUSTOM -> "Indiv."
             }
             val isSelected = selected == type
+            val bgColor by animateColorAsState(
+                targetValue = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
+                animationSpec = tween(200),
+                label = "filterBg"
+            )
+            val textColor by animateColorAsState(
+                targetValue = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                animationSpec = tween(200),
+                label = "filterText"
+            )
             Box(
                 modifier = Modifier
                     .weight(1f)
                     .clip(RoundedCornerShape(8.dp))
-                    .background(if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent)
+                    .background(bgColor)
                     .clickable { onSelect(type) }
                     .padding(vertical = 8.dp),
                 contentAlignment = Alignment.Center
@@ -84,7 +96,7 @@ fun FilterBar(
                     text = label,
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
-                    color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = textColor,
                     fontSize = 10.sp
                 )
             }
@@ -102,48 +114,47 @@ fun AccountCard(
     val gradientColors = if (isInvestment) {
         listOf(Color(0xFF1E3A5F), Color(0xFF1D4ED8))
     } else {
-        listOf(MaterialTheme.colorScheme.surface, MaterialTheme.colorScheme.surface)
+        listOf(MaterialTheme.colorScheme.surface, MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
     }
 
     Card(
         modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = Color.Transparent),
-        elevation = CardDefaults.cardElevation(defaultElevation = if (isInvestment) 6.dp else 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = if (isInvestment) 6.dp else 1.dp)
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(
-                    brush = Brush.linearGradient(gradientColors),
-                    shape = RoundedCornerShape(24.dp)
+                    brush = Brush.horizontalGradient(gradientColors),
+                    shape = RoundedCornerShape(20.dp)
                 )
                 .border(
                     width = 1.dp,
-                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
-                    shape = RoundedCornerShape(24.dp)
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f),
+                    shape = RoundedCornerShape(20.dp)
                 )
-                .padding(20.dp)
+                .padding(horizontal = 18.dp, vertical = 14.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                // Left: icon + name — takes all remaining space, clips if too long
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.weight(1f).padding(end = 10.dp)
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
+                            .size(38.dp)
+                            .clip(RoundedCornerShape(10.dp))
                             .background(
                                 if (isInvestment) Color.White.copy(alpha = 0.15f)
-                                else MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                                else MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
                             ),
                         contentAlignment = Alignment.Center
                     ) {
@@ -151,10 +162,10 @@ fun AccountCard(
                             imageVector = accountIcon(account.icon),
                             contentDescription = null,
                             tint = if (isInvestment) Color.White else MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(19.dp)
                         )
                     }
-                    Spacer(Modifier.width(10.dp))
+                    Spacer(Modifier.width(12.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = account.name,
@@ -169,15 +180,14 @@ fun AccountCard(
                             fontSize = 10.sp,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
-                            color = if (isInvestment) Color.White.copy(alpha = 0.6f)
+                            color = if (isInvestment) Color.White.copy(alpha = 0.55f)
                             else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
-                // Right: balance — never wraps
                 Text(
                     text = formatCurrency(account.balance),
-                    fontSize = 13.sp,
+                    fontSize = 14.sp,
                     fontWeight = FontWeight.Black,
                     maxLines = 1,
                     color = if (isInvestment) Color.White else MaterialTheme.colorScheme.onSurface
@@ -199,39 +209,43 @@ fun TransactionItem(
         if (tx.splitMode == "partner") tx.amount else tx.amount / 2
     } else tx.amount
 
+    val catColor = category?.let { parseHexColor(it.color) } ?: MaterialTheme.colorScheme.surfaceVariant
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(vertical = 12.dp),
+            .padding(vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
             modifier = Modifier
-                .size(42.dp)
-                .clip(CircleShape)
-                .background(category?.let { parseHexColor(it.color) } ?: Color.Gray),
+                .size(40.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(catColor.copy(alpha = 0.15f))
+                .border(1.dp, catColor.copy(alpha = 0.4f), RoundedCornerShape(12.dp)),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = when (tx.type) {
                     "transfer" -> Icons.Default.SwapHoriz
-                    "income" -> Icons.Default.ArrowUpward
-                    else -> Icons.Default.ArrowDownward
+                    "income"   -> Icons.Default.ArrowUpward
+                    else       -> Icons.Default.ArrowDownward
                 },
                 contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier.size(18.dp)
+                tint = catColor,
+                modifier = Modifier.size(17.dp)
             )
         }
-        Spacer(Modifier.width(14.dp))
+        Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = tx.description.ifBlank { category?.name ?: tx.type },
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
             Text(
                 text = formatDateDisplay(tx.date),
@@ -240,12 +254,13 @@ fun TransactionItem(
                 fontSize = 10.sp
             )
         }
+        Spacer(Modifier.width(8.dp))
         Column(horizontalAlignment = Alignment.End) {
             Text(
-                text = "${if (isExpense) "-" else "+"}${formatCurrency(displayAmount)}",
+                text = "${if (isExpense) "−" else "+"}${formatCurrency(displayAmount)}",
                 fontWeight = FontWeight.Bold,
                 color = if (isExpense) AccentRed else AccentGreen,
-                style = MaterialTheme.typography.bodyMedium
+                fontSize = 13.sp
             )
             if (!isSplitOverview && tx.isSplit) {
                 Text(
@@ -261,12 +276,15 @@ fun TransactionItem(
                     text = "Ausgleich",
                     fontSize = 9.sp,
                     fontWeight = FontWeight.Bold,
-                    color = androidx.compose.ui.graphics.Color(0xFF3B82F6)
+                    color = PrimaryBlue
                 )
             }
         }
     }
-    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f), thickness = 0.5.dp)
+    HorizontalDivider(
+        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f),
+        thickness = 0.5.dp
+    )
 }
 
 fun formatDateDisplay(dateStr: String): String {
