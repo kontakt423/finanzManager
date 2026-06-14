@@ -1,0 +1,16 @@
+# Build outputs
+.gradle/
+build/
+app/build/
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+local.properties
+
+# Gradle wrapper jar (downloaded automatically by Android Studio)
+gradle/wrapper/gradle-wrapper.jar
+
+# OS
+.DS_Store
+Thumbs.db
