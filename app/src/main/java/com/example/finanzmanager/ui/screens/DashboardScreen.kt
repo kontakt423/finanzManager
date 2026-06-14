@@ -25,6 +25,8 @@ import com.example.finanzmanager.ui.components.*
 import com.example.finanzmanager.ui.screens.DatePickerButton
 import com.example.finanzmanager.ui.FilterType
 import com.example.finanzmanager.ui.theme.*
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 
 @Composable
 fun DashboardScreen(
@@ -40,6 +42,19 @@ fun DashboardScreen(
     val filteredTxs = vm.filteredTransactions()
     val analysis = vm.analysis()
     val totals = vm.totals()
+
+    var recentFilter by remember { mutableStateOf("month") }
+    val dateFmt = DateTimeFormatter.ofPattern("yyyy-MM-dd")
+    val todayStr = LocalDate.now().format(dateFmt)
+    val recentFrom = when (recentFilter) {
+        "today" -> todayStr
+        "week"  -> LocalDate.now().minusWeeks(1).format(dateFmt)
+        "month" -> LocalDate.now().minusMonths(1).format(dateFmt)
+        else    -> ""
+    }
+    val recentTxs = state.transactions
+        .filter { tx -> recentFrom.isEmpty() || tx.date >= recentFrom }
+        .sortedByDescending { it.date }
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -282,10 +297,39 @@ fun DashboardScreen(
 
         // Recent Transactions
         item {
-            SectionHeader("Letzte Buchungen", onAdd = null)
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "LETZTE BUCHUNGEN",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 9.sp,
+                    letterSpacing = 1.5.sp
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf("today" to "Heute", "week" to "Woche", "month" to "Monat", "all" to "Alles").forEach { (key, label) ->
+                        val isSelected = recentFilter == key
+                        Surface(
+                            onClick = { recentFilter = key },
+                            shape = RoundedCornerShape(20.dp),
+                            color = if (isSelected) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.surfaceVariant
+                        ) {
+                            Text(
+                                label,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isSelected) Color.White
+                                        else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
         }
 
-        if (filteredTxs.isEmpty()) {
+        if (recentTxs.isEmpty()) {
             item {
                 Box(
                     modifier = Modifier
@@ -312,7 +356,7 @@ fun DashboardScreen(
                 }
             }
         } else {
-            items(filteredTxs.take(15)) { tx ->
+            items(recentTxs.take(50)) { tx ->
                 val cat = state.categories.find { it.id == tx.categoryId }
                 TransactionItem(tx = tx, category = cat, onClick = { onEditTransaction(tx) })
             }

@@ -50,7 +50,7 @@ fun TransactionFormSheet(
     var amount       by remember { mutableStateOf((initialTx?.amount ?: initialOrder?.amount ?: 0.0).let { if (it == 0.0) "" else it.toString() }) }
     var description  by remember { mutableStateOf(initialTx?.description ?: initialOrder?.description ?: "") }
     var categoryId   by remember { mutableStateOf(initialTx?.categoryId ?: initialOrder?.categoryId ?: state.categories.firstOrNull()?.id ?: "") }
-    var accountId    by remember { mutableStateOf(initialTx?.accountId ?: initialOrder?.accountId ?: state.accounts.firstOrNull()?.id ?: "") }
+    var accountId    by remember { mutableStateOf(initialTx?.accountId ?: initialOrder?.accountId ?: state.accounts.find { it.name == "Girokonto" }?.id ?: state.accounts.firstOrNull()?.id ?: "") }
     var toAccountId  by remember { mutableStateOf(initialTx?.toAccountId ?: initialOrder?.toAccountId ?: "") }
     var isSplit      by remember { mutableStateOf(initialTx?.isSplit ?: initialOrder?.isSplit ?: false) }
     var isSettlement by remember { mutableStateOf(initialTx?.isSettlement ?: false) }
