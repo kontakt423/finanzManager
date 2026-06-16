@@ -7,7 +7,10 @@ data class Account(
     val category: String,
     val type: String,
     val icon: String,
-    val history: List<HistoryEntry> = emptyList()
+    val history: List<HistoryEntry> = emptyList(),
+    val interestRate: Double = 0.0,
+    val interestInterval: String = "monthly",
+    val nextInterestRun: String = ""
 )
 
 data class Transaction(

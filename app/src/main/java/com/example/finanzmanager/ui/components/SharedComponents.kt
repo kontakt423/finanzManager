@@ -175,14 +175,34 @@ fun AccountCard(
                             overflow = TextOverflow.Ellipsis,
                             color = if (isInvestment) Color.White else MaterialTheme.colorScheme.onSurface
                         )
-                        Text(
-                            text = account.category,
-                            fontSize = 10.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            color = if (isInvestment) Color.White.copy(alpha = 0.55f)
-                            else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = account.category,
+                                fontSize = 10.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                color = if (isInvestment) Color.White.copy(alpha = 0.55f)
+                                else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            if (account.interestRate > 0) {
+                                androidx.compose.foundation.layout.Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(Color(0xFF10B981).copy(alpha = if (isInvestment) 0.3f else 0.15f))
+                                        .padding(horizontal = 4.dp, vertical = 1.dp)
+                                ) {
+                                    Text(
+                                        "${account.interestRate}% p.a.",
+                                        fontSize = 8.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isInvestment) Color(0xFF86EFAC) else Color(0xFF059669)
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
                 Text(

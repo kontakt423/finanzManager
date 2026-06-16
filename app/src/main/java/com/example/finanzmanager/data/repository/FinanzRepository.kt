@@ -63,6 +63,49 @@ class FinanzRepository(private val db: AppDatabase) {
     suspend fun upsertSavingsGoal(goal: SavingsGoal) = db.savingsGoalDao().insert(goal.toEntity())
     suspend fun deleteSavingsGoal(id: String) = db.savingsGoalDao().deleteById(id)
 
+    // ── Interest Processing ───────────────────────────────────────────────────
+    suspend fun processInterest() {
+        val today = LocalDate.now().format(fmt)
+        val accounts = db.accountDao().getAllSync().map { it.toDomain() }
+
+        for (acc in accounts) {
+            if (acc.interestRate <= 0.0 || acc.nextInterestRun.isEmpty()) continue
+            if (acc.nextInterestRun > today) continue
+
+            var currentRun = acc.nextInterestRun
+            var iterations = 0
+
+            while (currentRun <= today && iterations < 120) {
+                iterations++
+                val periodRate = when (acc.interestInterval) {
+                    "quarterly" -> acc.interestRate / 4.0 / 100.0
+                    "yearly"    -> acc.interestRate / 100.0
+                    else        -> acc.interestRate / 12.0 / 100.0  // monthly
+                }
+                val fresh = getAccountById(acc.id) ?: break
+                val interest = round(fresh.balance * periodRate)
+                if (interest > 0) {
+                    val tx = Transaction(
+                        id = UUID.randomUUID().toString().replace("-", "").take(9),
+                        type = "income",
+                        amount = interest,
+                        description = "Zinsen (${acc.interestRate}% p.a.)",
+                        categoryId = "",
+                        accountId = acc.id,
+                        date = currentRun
+                    )
+                    db.transactionDao().insert(tx.toEntity())
+                    updateAccountBalance(acc.id, round(fresh.balance + interest))
+                }
+                currentRun = advanceDate(currentRun, acc.interestInterval)
+            }
+
+            if (currentRun != acc.nextInterestRun) {
+                db.accountDao().insert(acc.copy(nextInterestRun = currentRun).toEntity())
+            }
+        }
+    }
+
     // ── Standing Order Processing ─────────────────────────────────────────────
     suspend fun processStandingOrders(): Boolean = processingLock.withLock {
         val today = LocalDate.now().format(fmt)
