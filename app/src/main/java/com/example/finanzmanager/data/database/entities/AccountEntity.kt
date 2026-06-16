@@ -8,8 +8,11 @@ data class AccountEntity(
     @PrimaryKey val id: String,
     val name: String,
     val balance: Double,
-    val category: String,   // "Liquide Mittel", "Investments", "Vorsorge"
-    val type: String,       // "cash", "investment"
-    val icon: String,       // "bank", "wallet", "stock"
-    val historyJson: String = "[]"  // JSON array of {date, val} for investments
+    val category: String,
+    val type: String,
+    val icon: String,
+    val historyJson: String = "[]",
+    val interestRate: Double = 0.0,         // annual rate in %, 0 = disabled
+    val interestInterval: String = "monthly", // "monthly", "quarterly", "yearly"
+    val nextInterestRun: String = ""          // "" = disabled, "yyyy-MM-dd" = next scheduled run
 )

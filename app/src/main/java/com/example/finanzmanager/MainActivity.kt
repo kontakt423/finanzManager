@@ -36,6 +36,8 @@ sealed class Sheet {
     data class InvestmentDetail(val account: Account) : Sheet()
     data class EditCategory(val category: Category?) : Sheet()
     object SplitDetail : Sheet()
+    object Search : Sheet()
+    data class AddGoal(val goal: com.example.finanzmanager.domain.SavingsGoal? = null) : Sheet()
 }
 
 class MainActivity : ComponentActivity() {
@@ -120,7 +122,10 @@ fun FinanzManagerApp(vm: FinanzViewModel, state: UiState) {
                             activeSheet = Sheet.EditAccount(acc)
                     },
                     onInvestmentDetail = { activeSheet = Sheet.InvestmentDetail(it) },
-                    onSplitPotClick = { activeSheet = Sheet.SplitDetail }
+                    onSplitPotClick = { activeSheet = Sheet.SplitDetail },
+                    onSearch = { activeSheet = Sheet.Search },
+                    onAddGoal = { activeSheet = Sheet.AddGoal() },
+                    onEditGoal = { activeSheet = Sheet.AddGoal(it) }
                 )
                 ActiveTab.ANALYSIS -> AnalysisScreen(
                     state = state,
@@ -171,6 +176,16 @@ fun FinanzManagerApp(vm: FinanzViewModel, state: UiState) {
             state = state,
             vm = vm,
             onEditTransaction = { activeSheet = Sheet.AddTransaction(it) },
+            onDismiss = { activeSheet = Sheet.None }
+        )
+        is Sheet.Search -> TransactionSearchSheet(
+            state = state,
+            onEditTransaction = { activeSheet = Sheet.AddTransaction(it) },
+            onDismiss = { activeSheet = Sheet.None }
+        )
+        is Sheet.AddGoal -> SavingsGoalSheet(
+            goal = sheet.goal,
+            vm = vm,
             onDismiss = { activeSheet = Sheet.None }
         )
         Sheet.None -> Unit

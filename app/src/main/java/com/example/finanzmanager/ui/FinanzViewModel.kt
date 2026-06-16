@@ -23,6 +23,7 @@ data class UiState(
     val transactions: List<Transaction> = emptyList(),
     val categories: List<Category> = emptyList(),
     val standingOrders: List<StandingOrder> = emptyList(),
+    val savingsGoals: List<SavingsGoal> = emptyList(),
     val isDarkMode: Boolean = true,
     val splitPotEnabled: Boolean = true,
     val countFullSplitIncome: Boolean = false,
@@ -85,6 +86,11 @@ class FinanzViewModel(
             }
         }
         viewModelScope.launch {
+            repo.savingsGoals.collect { goals ->
+                _state.update { it.copy(savingsGoals = goals) }
+            }
+        }
+        viewModelScope.launch {
             repo.seedDefaultData()
         }
         viewModelScope.launch {
@@ -93,8 +99,9 @@ class FinanzViewModel(
             state.filter { it.isLoaded }.take(1).collect {
                 try {
                     repo.processStandingOrders()
+                    repo.processInterest()
                 } catch (e: Exception) {
-                    e.printStackTrace() // never crash the app over a standing-order error
+                    e.printStackTrace()
                 }
             }
         }
@@ -356,14 +363,21 @@ class FinanzViewModel(
     }
 
     // ---- Account CRUD ----
-    fun saveAccount(id: String?, name: String, balance: Double, category: String, type: String, icon: String) =
-        viewModelScope.launch {
-            val acc = Account(
-                id = id ?: UUID.randomUUID().toString().replace("-", "").take(9),
-                name = name, balance = balance, category = category, type = type, icon = icon
-            )
-            repo.upsertAccount(acc)
-        }
+    fun saveAccount(
+        id: String?, name: String, balance: Double, category: String, type: String, icon: String,
+        interestRate: Double = 0.0, interestInterval: String = "monthly", nextInterestRun: String = ""
+    ) = viewModelScope.launch {
+        val existing = if (id != null) repo.getAccountById(id) else null
+        val acc = Account(
+            id = id ?: UUID.randomUUID().toString().replace("-", "").take(9),
+            name = name, balance = balance, category = category, type = type, icon = icon,
+            history = existing?.history ?: emptyList(),
+            interestRate = interestRate,
+            interestInterval = interestInterval,
+            nextInterestRun = nextInterestRun
+        )
+        repo.upsertAccount(acc)
+    }
 
     fun deleteAccount(id: String) = viewModelScope.launch { repo.deleteAccount(id) }
 
@@ -419,6 +433,21 @@ class FinanzViewModel(
 
     fun deleteStandingOrder(id: String) = viewModelScope.launch { repo.deleteStandingOrder(id) }
 
+    // ---- Savings Goals CRUD ----
+    fun saveSavingsGoal(
+        id: String?, name: String, targetAmount: Double,
+        savedAmount: Double, deadline: String, color: String
+    ) = viewModelScope.launch {
+        val goal = SavingsGoal(
+            id = id ?: UUID.randomUUID().toString().replace("-", "").take(9),
+            name = name, targetAmount = targetAmount, savedAmount = savedAmount,
+            deadline = deadline, color = color
+        )
+        repo.upsertSavingsGoal(goal)
+    }
+
+    fun deleteSavingsGoal(id: String) = viewModelScope.launch { repo.deleteSavingsGoal(id) }
+
     // ---- Export / Import ----
     fun exportData(context: Context, onResult: (Uri?) -> Unit) = viewModelScope.launch {
         val s = _state.value
@@ -427,7 +456,7 @@ class FinanzViewModel(
             "splitPotEnabled" to s.splitPotEnabled,
             "countFullSplitIncome" to s.countFullSplitIncome
         )
-        val json = repo.exportToJson(s.accounts, s.transactions, s.categories, s.standingOrders, settingsMap)
+        val json = repo.exportToJson(s.accounts, s.transactions, s.categories, s.standingOrders, s.savingsGoals, settingsMap)
         try {
             val fileName = "FinanzBackup_${today()}.json"
             val file = java.io.File(context.cacheDir, fileName)

@@ -7,7 +7,10 @@ data class Account(
     val category: String,
     val type: String,
     val icon: String,
-    val history: List<HistoryEntry> = emptyList()
+    val history: List<HistoryEntry> = emptyList(),
+    val interestRate: Double = 0.0,
+    val interestInterval: String = "monthly",
+    val nextInterestRun: String = ""
 )
 
 data class Transaction(
@@ -73,4 +76,13 @@ data class Analysis(
     val totalSplitExpenses: Double,  // all time - what partner owes you
     val totalSplitIncome: Double,    // all time - what you owe partner
     val totalSettlements: Double     // all time - already paid out
+)
+
+data class SavingsGoal(
+    val id: String,
+    val name: String,
+    val targetAmount: Double,
+    val savedAmount: Double,
+    val deadline: String = "",   // "" = no deadline, otherwise "yyyy-MM-dd"
+    val color: String = "#3b82f6"
 )
