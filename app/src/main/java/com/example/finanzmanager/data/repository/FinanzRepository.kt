@@ -213,11 +213,32 @@ class FinanzRepository(private val db: AppDatabase) {
                     TypeToken.getParameterized(List::class.java, clazz).type) ?: emptyList()
             }
 
-            val accounts       = parseList("accounts",      Account::class.java)
-            val transactions   = parseList("transactions",  Transaction::class.java)
+            // Apply safe defaults for fields that may be absent in older backups.
+            // Gson sets missing non-nullable Kotlin fields to null at runtime, which
+            // causes Room NOT NULL constraint failures without these guards.
+            val accounts = parseList("accounts", Account::class.java).map { acc ->
+                acc.copy(
+                    interestInterval = acc.interestInterval ?: "monthly",
+                    nextInterestRun  = acc.nextInterestRun  ?: ""
+                )
+            }
+            val transactions = parseList("transactions", Transaction::class.java).map { tx ->
+                tx.copy(
+                    splitMode    = tx.splitMode    ?: "half",
+                    toAccountId  = tx.toAccountId,     // nullable — already safe
+                    categoryId   = tx.categoryId   ?: ""
+                )
+            }
             val categories     = parseList("categories",    Category::class.java)
-            val standingOrders = parseList("standingOrders", StandingOrder::class.java)
-            val savingsGoals   = parseList("savingsGoals",  SavingsGoal::class.java)
+            val standingOrders = parseList("standingOrders", StandingOrder::class.java).map { o ->
+                o.copy(splitMode = o.splitMode ?: "half")
+            }
+            val savingsGoals = parseList("savingsGoals", SavingsGoal::class.java).map { g ->
+                g.copy(
+                    deadline = g.deadline ?: "",
+                    color    = g.color    ?: "#3b82f6"
+                )
+            }
 
             db.withTransaction {
                 db.accountDao().deleteAll()
