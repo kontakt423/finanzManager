@@ -24,6 +24,8 @@ import com.example.finanzmanager.domain.Account
 import com.example.finanzmanager.domain.Category
 import com.example.finanzmanager.domain.StandingOrder
 import com.example.finanzmanager.domain.Transaction
+import com.example.finanzmanager.ocr.ReceiptScanScreen
+import com.example.finanzmanager.ocr.ScannedReceipt
 import com.example.finanzmanager.ui.*
 import com.example.finanzmanager.ui.screens.*
 import com.example.finanzmanager.ui.theme.FinanzManagerTheme
@@ -61,6 +63,8 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun FinanzManagerApp(vm: FinanzViewModel, state: UiState) {
     var activeSheet by remember { mutableStateOf<Sheet>(Sheet.None) }
+    var scannerActive by remember { mutableStateOf(false) }
+    var scannedResult by remember { mutableStateOf<ScannedReceipt?>(null) }
 
     val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(state.snackbarMessage) {
@@ -145,8 +149,16 @@ fun FinanzManagerApp(vm: FinanzViewModel, state: UiState) {
         is Sheet.AddTransaction -> TransactionFormSheet(
             initialTx = sheet.tx,
             isStandingOrder = false,
+            scanned = scannedResult,
+            onScanReceipt = {
+                activeSheet = Sheet.None
+                scannerActive = true
+            },
             state = state, vm = vm,
-            onDismiss = { activeSheet = Sheet.None }
+            onDismiss = {
+                activeSheet = Sheet.None
+                scannedResult = null
+            }
         )
         is Sheet.AddStandingOrder -> TransactionFormSheet(
             initialTx = null,
@@ -174,6 +186,18 @@ fun FinanzManagerApp(vm: FinanzViewModel, state: UiState) {
             onDismiss = { activeSheet = Sheet.None }
         )
         Sheet.None -> Unit
+    }
+
+    // Vollbild-Kamerascan (liegt über allem)
+    if (scannerActive) {
+        ReceiptScanScreen(
+            onDismiss = { scannerActive = false },
+            onResult = { receipt ->
+                scannerActive = false
+                scannedResult = receipt
+                activeSheet = Sheet.AddTransaction()
+            }
+        )
     }
 }
 

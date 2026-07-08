@@ -29,6 +29,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.finanzmanager.domain.*
+import com.example.finanzmanager.ocr.ScannedReceipt
 import com.example.finanzmanager.ui.FinanzViewModel
 import com.example.finanzmanager.ui.UiState
 import com.example.finanzmanager.ui.today
@@ -40,21 +41,23 @@ fun TransactionFormSheet(
     initialTx: Transaction?,
     isStandingOrder: Boolean = false,
     initialOrder: StandingOrder? = null,
+    scanned: ScannedReceipt? = null,
+    onScanReceipt: (() -> Unit)? = null,
     state: UiState,
     vm: FinanzViewModel,
     onDismiss: () -> Unit
 ) {
     var isOrder by remember { mutableStateOf(isStandingOrder || initialOrder != null) }
     var txType by remember { mutableStateOf(initialTx?.type ?: initialOrder?.type ?: "expense") }
-    var amount by remember { mutableStateOf((initialTx?.amount ?: initialOrder?.amount ?: 0.0).let { if (it == 0.0) "" else it.toString() }) }
-    var description by remember { mutableStateOf(initialTx?.description ?: initialOrder?.description ?: "") }
+    var amount by remember { mutableStateOf((initialTx?.amount ?: initialOrder?.amount ?: scanned?.amount ?: 0.0).let { if (it == 0.0) "" else it.toString() }) }
+    var description by remember { mutableStateOf(initialTx?.description ?: initialOrder?.description ?: scanned?.merchant ?: "") }
     var categoryId by remember { mutableStateOf(initialTx?.categoryId ?: initialOrder?.categoryId ?: state.categories.firstOrNull()?.id ?: "") }
     var accountId by remember { mutableStateOf(initialTx?.accountId ?: initialOrder?.accountId ?: state.accounts.firstOrNull()?.id ?: "") }
     var toAccountId by remember { mutableStateOf(initialTx?.toAccountId ?: initialOrder?.toAccountId ?: "") }
     var isSplit by remember { mutableStateOf(initialTx?.isSplit ?: initialOrder?.isSplit ?: false) }
     var isSettlement by remember { mutableStateOf(initialTx?.isSettlement ?: false) }
     var splitMode by remember { mutableStateOf(initialTx?.splitMode ?: initialOrder?.splitMode ?: "half") }
-    var date by remember { mutableStateOf(initialTx?.date ?: today()) }
+    var date by remember { mutableStateOf(initialTx?.date ?: scanned?.date ?: today()) }
     var interval by remember { mutableStateOf(initialOrder?.interval ?: "monthly") }
     var nextRun by remember { mutableStateOf(initialOrder?.nextRun ?: today()) }
 
@@ -140,6 +143,42 @@ fun TransactionFormSheet(
                         Text(label, fontWeight = FontWeight.Bold, fontSize = 11.sp,
                             color = if (txType == type) Color.White else MaterialTheme.colorScheme.onSurfaceVariant)
                     }
+                }
+            }
+
+            // Beleg scannen (nur bei neuer Einmal-Buchung)
+            if (onScanReceipt != null && initialTx == null && !isOrder) {
+                OutlinedButton(
+                    onClick = onScanReceipt,
+                    modifier = Modifier.fillMaxWidth().height(50.dp),
+                    shape = RoundedCornerShape(14.dp)
+                ) {
+                    Icon(Icons.Default.DocumentScanner, contentDescription = null,
+                        modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Beleg scannen", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                }
+            }
+
+            // Hinweis, dass Werte aus einem Beleg übernommen wurden
+            if (scanned != null) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0xFF0EA5E9).copy(alpha = 0.12f))
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.AutoAwesome, contentDescription = null,
+                        tint = Color(0xFF0EA5E9), modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "Aus Beleg übernommen – bitte prüfen und ggf. korrigieren.",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.Medium
+                    )
                 }
             }
 
