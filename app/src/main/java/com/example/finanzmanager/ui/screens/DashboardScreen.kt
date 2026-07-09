@@ -5,7 +5,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -14,6 +13,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -25,6 +25,8 @@ import com.example.finanzmanager.ui.components.*
 import com.example.finanzmanager.ui.screens.DatePickerButton
 import com.example.finanzmanager.ui.FilterType
 import com.example.finanzmanager.ui.theme.*
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 
 @Composable
 fun DashboardScreen(
@@ -35,16 +37,30 @@ fun DashboardScreen(
     onEditAccount: (Account) -> Unit,
     onInvestmentDetail: (Account) -> Unit,
     onSplitPotClick: () -> Unit,
+    onSearch: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val filteredTxs = vm.filteredTransactions()
     val analysis = vm.analysis()
     val totals = vm.totals()
 
+    var recentFilter by remember { mutableStateOf("month") }
+    val dateFmt = DateTimeFormatter.ofPattern("yyyy-MM-dd")
+    val todayStr = LocalDate.now().format(dateFmt)
+    val recentFrom = when (recentFilter) {
+        "today" -> todayStr
+        "week"  -> LocalDate.now().minusWeeks(1).format(dateFmt)
+        "month" -> LocalDate.now().minusMonths(1).format(dateFmt)
+        else    -> ""
+    }
+    val recentTxs = state.transactions
+        .filter { tx -> recentFrom.isEmpty() || tx.date >= recentFrom }
+        .sortedByDescending { it.date }
+
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         // Header
         item {
@@ -67,23 +83,40 @@ fun DashboardScreen(
                         fontSize = 11.sp
                     )
                 }
-                FilledIconButton(
-                    onClick = onAddTransaction,
-                    colors = IconButtonDefaults.filledIconButtonColors(containerColor = MaterialTheme.colorScheme.primary)
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = "Hinzufügen")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    IconButton(onClick = onSearch) {
+                        Icon(
+                            Icons.Default.Search,
+                            contentDescription = "Suchen",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    FilledIconButton(
+                        onClick = onAddTransaction,
+                        colors = IconButtonDefaults.filledIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.primary
+                        )
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = "Hinzufügen")
+                    }
                 }
             }
         }
 
-        // Total Balance Hero Card
+        // Total Balance Hero Card — gradient
         item {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(28.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(28.dp))
+                    .background(
+                        brush = Brush.linearGradient(
+                            colors = listOf(HeroGradientStart, HeroGradientEnd)
+                        )
+                    )
+                    .padding(24.dp)
             ) {
-                Column(modifier = Modifier.padding(24.dp)) {
+                Column {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -93,7 +126,7 @@ fun DashboardScreen(
                             Text(
                                 "GESAMTVERMÖGEN",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = Color.White.copy(alpha = 0.7f),
+                                color = Color.White.copy(alpha = 0.65f),
                                 fontSize = 9.sp,
                                 fontWeight = FontWeight.Bold,
                                 letterSpacing = 1.5.sp
@@ -106,23 +139,61 @@ fun DashboardScreen(
                                 color = Color.White
                             )
                         }
-                        Icon(
-                            Icons.Default.AccountBalanceWallet,
-                            contentDescription = null,
-                            tint = Color.White.copy(alpha = 0.3f),
-                            modifier = Modifier.size(40.dp)
-                        )
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(Color.White.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.AccountBalanceWallet,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
                     }
                     Spacer(Modifier.height(20.dp))
                     HorizontalDivider(color = Color.White.copy(alpha = 0.2f))
-                    Spacer(Modifier.height(16.dp))
+                    Spacer(Modifier.height(14.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        HeroStat("LIQUIDE", formatCurrency(totals.liquid), Color.White)
-                        HeroStat("EINNAHMEN", "+${formatCurrency(analysis.income)}", Color(0xFF86EFAC))
-                        HeroStat("AUSGABEN", "-${formatCurrency(analysis.expenses)}", Color(0xFFFCA5A5))
+                        HeroStat("LIQUIDE",    formatCurrency(totals.liquid),           Color.White)
+                        HeroStat("EINNAHMEN",  "+${formatCurrency(analysis.income)}",   Color(0xFF86EFAC))
+                        HeroStat("AUSGABEN",   "−${formatCurrency(analysis.expenses)}", Color(0xFFFCA5A5))
+                    }
+
+                    // Income / Expense ratio bar
+                    val totalFlow = analysis.income + analysis.expenses
+                    if (totalFlow > 0) {
+                        val expRatio = (analysis.expenses / totalFlow).toFloat().coerceIn(0f, 1f)
+                        Spacer(Modifier.height(14.dp))
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(4.dp)
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(Color.White.copy(alpha = 0.18f))
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth(expRatio)
+                                    .fillMaxHeight()
+                                    .clip(RoundedCornerShape(2.dp))
+                                    .background(
+                                        if (expRatio > 0.75f) Color(0xFFFCA5A5) else Color(0xFF86EFAC)
+                                    )
+                            )
+                        }
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "${(expRatio * 100).toInt()}% Ausgabenquote",
+                            fontSize = 8.sp,
+                            color = Color.White.copy(alpha = 0.5f)
+                        )
                     }
                 }
             }
@@ -136,7 +207,7 @@ fun DashboardScreen(
             )
         }
 
-        // Custom date range pickers — only shown when "Indiv." is selected
+        // Custom date range pickers
         if (state.filterType == FilterType.CUSTOM) {
             item {
                 Row(
@@ -166,12 +237,12 @@ fun DashboardScreen(
             }
         }
 
-        // VAT / Net Revenue (visible when Rgnr transactions exist)
+        // VAT / Net Revenue
         if (analysis.netRevenue > 0) {
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp),
+                    shape = RoundedCornerShape(18.dp),
                     colors = CardDefaults.cardColors(containerColor = Color(0xFF065F46))
                 ) {
                     Row(
@@ -180,7 +251,7 @@ fun DashboardScreen(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Receipt, contentDescription = null, tint = AccentGreen, modifier = Modifier.size(20.dp))
+                            Icon(Icons.Default.Receipt, contentDescription = null, tint = AccentGreen, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(10.dp))
                             Column {
                                 Text("Netto-Umsatz", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 13.sp)
@@ -193,13 +264,13 @@ fun DashboardScreen(
             }
         }
 
-        // Accounts
+        // Accounts header
         item {
             SectionHeader("Konten", onAdd = onAddTransaction)
         }
 
-        val cashAccounts = state.accounts.filter { it.category != "Investments" && it.category != "Vorsorge" }
-        val investAccounts = state.accounts.filter { it.category == "Investments" || it.category == "Vorsorge" }
+        val cashAccounts    = state.accounts.filter { it.category != "Investments" && it.category != "Vorsorge" }
+        val investAccounts  = state.accounts.filter { it.category == "Investments" || it.category == "Vorsorge" }
 
         items(cashAccounts) { acc ->
             AccountCard(account = acc, onClick = { onEditAccount(acc) })
@@ -221,35 +292,81 @@ fun DashboardScreen(
             }
         }
 
-        // Split Pot - always show when enabled (even with 0 values)
+        // Split Pot
         if (state.splitPotEnabled) {
             item {
                 SplitPotCard(
                     splitExpenses = analysis.totalSplitExpenses,
-                    splitIncome = analysis.totalSplitIncome,
-                    settlements = analysis.totalSettlements,
-                    startDate = state.splitPotStartDate,
-                    onClick = onSplitPotClick
+                    splitIncome   = analysis.totalSplitIncome,
+                    settlements   = analysis.totalSettlements,
+                    startDate     = state.splitPotStartDate,
+                    onClick       = onSplitPotClick
                 )
             }
         }
 
         // Recent Transactions
         item {
-            SectionHeader("Letzte Buchungen", onAdd = null)
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "LETZTE BUCHUNGEN",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 9.sp,
+                    letterSpacing = 1.5.sp
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf("today" to "Heute", "week" to "Woche", "month" to "Monat", "all" to "Alles").forEach { (key, label) ->
+                        val isSelected = recentFilter == key
+                        Surface(
+                            onClick = { recentFilter = key },
+                            shape = RoundedCornerShape(20.dp),
+                            color = if (isSelected) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.surfaceVariant
+                        ) {
+                            Text(
+                                label,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isSelected) Color.White
+                                        else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
         }
 
-        if (filteredTxs.isEmpty()) {
+        if (recentTxs.isEmpty()) {
             item {
                 Box(
-                    modifier = Modifier.fillMaxWidth().padding(32.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                        .padding(vertical = 32.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("Keine Buchungen", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(
+                            Icons.Default.Receipt,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                            modifier = Modifier.size(32.dp)
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "Keine Buchungen im Zeitraum",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                            fontSize = 13.sp
+                        )
+                    }
                 }
             }
         } else {
-            items(filteredTxs.take(15)) { tx ->
+            items(recentTxs.take(50)) { tx ->
                 val cat = state.categories.find { it.id == tx.categoryId }
                 TransactionItem(tx = tx, category = cat, onClick = { onEditTransaction(tx) })
             }
@@ -295,16 +412,27 @@ fun SectionHeader(title: String, onAdd: (() -> Unit)?) {
 }
 
 @Composable
-fun SplitPotCard(splitExpenses: Double, splitIncome: Double, settlements: Double = 0.0, startDate: String = "", onClick: () -> Unit = {}) {
+fun SplitPotCard(
+    splitExpenses: Double,
+    splitIncome: Double,
+    settlements: Double = 0.0,
+    startDate: String = "",
+    onClick: () -> Unit = {}
+) {
     val net = splitExpenses - splitIncome
     val netAfterSettlements = (net - settlements).coerceAtLeast(0.0)
     val netPositive = net >= 0
-    Card(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF5B21B6))
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(24.dp))
+            .background(
+                brush = Brush.linearGradient(listOf(Color(0xFF4C1D95), Color(0xFF5B21B6), Color(0xFF7C3AED)))
+            )
+            .clickable(onClick = onClick)
+            .padding(20.dp)
     ) {
-        Column(modifier = Modifier.padding(20.dp)) {
+        Column {
             // Header
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -318,12 +446,11 @@ fun SplitPotCard(splitExpenses: Double, splitIncome: Double, settlements: Double
                     Text("SPLIT-TOPF", fontWeight = FontWeight.Black,
                         color = Color.White, fontSize = 11.sp, letterSpacing = 1.sp)
                 }
-                // Net balance badge
                 val badgeColor = if (netPositive) Color(0xFF10B981) else Color(0xFFEF4444)
-                val badgeText = "${if (netPositive) "+" else ""}${formatCurrency(net)}"
+                val badgeText  = "${if (netPositive) "+" else ""}${formatCurrency(net)}"
                 Surface(
                     shape = RoundedCornerShape(20.dp),
-                    color = badgeColor.copy(alpha = 0.2f)
+                    color = badgeColor.copy(alpha = 0.22f)
                 ) {
                     Text(
                         text = badgeText,
@@ -335,35 +462,25 @@ fun SplitPotCard(splitExpenses: Double, splitIncome: Double, settlements: Double
             }
             if (startDate.isNotBlank()) {
                 Spacer(Modifier.height(6.dp))
-                Text(
-                    "Gilt ab $startDate",
-                    fontSize = 9.sp, color = Color.White.copy(0.6f),
-                    fontWeight = FontWeight.Bold
-                )
+                Text("Gilt ab $startDate", fontSize = 9.sp, color = Color.White.copy(0.55f), fontWeight = FontWeight.Bold)
             }
             Spacer(Modifier.height(16.dp))
             HorizontalDivider(color = Color.White.copy(alpha = 0.15f))
             Spacer(Modifier.height(14.dp))
-            // Two columns
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Column {
-                    Text("Guthaben", color = Color.White.copy(0.6f), fontSize = 9.sp,
-                        fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp)
-                    Text("(Partner schuldet dir)", color = Color.White.copy(0.5f), fontSize = 8.sp)
+                    Text("Guthaben", color = Color.White.copy(0.6f), fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp)
+                    Text("(Partner schuldet dir)", color = Color.White.copy(0.45f), fontSize = 8.sp)
                     Spacer(Modifier.height(4.dp))
-                    Text(formatCurrency(splitExpenses), color = Color(0xFF86EFAC),
-                        fontWeight = FontWeight.Black, fontSize = 17.sp)
+                    Text(formatCurrency(splitExpenses), color = Color(0xFF86EFAC), fontWeight = FontWeight.Black, fontSize = 17.sp)
                 }
                 Column(horizontalAlignment = Alignment.End) {
-                    Text("Abzug", color = Color.White.copy(0.6f), fontSize = 9.sp,
-                        fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp)
-                    Text("(du schuldest Partner)", color = Color.White.copy(0.5f), fontSize = 8.sp)
+                    Text("Abzug", color = Color.White.copy(0.6f), fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp)
+                    Text("(du schuldest Partner)", color = Color.White.copy(0.45f), fontSize = 8.sp)
                     Spacer(Modifier.height(4.dp))
-                    Text(formatCurrency(splitIncome), color = Color(0xFFF9A8D4),
-                        fontWeight = FontWeight.Black, fontSize = 17.sp)
+                    Text(formatCurrency(splitIncome), color = Color(0xFFF9A8D4), fontWeight = FontWeight.Black, fontSize = 17.sp)
                 }
             }
-            // Settlements paid row (only shown when > 0)
             if (settlements > 0.0) {
                 Spacer(Modifier.height(10.dp))
                 HorizontalDivider(color = Color.White.copy(alpha = 0.15f))
@@ -374,47 +491,28 @@ fun SplitPotCard(splitExpenses: Double, splitIncome: Double, settlements: Double
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Default.Handshake,
-                            contentDescription = null,
-                            tint = Color.White.copy(0.6f),
-                            modifier = Modifier.size(14.dp)
-                        )
+                        Icon(Icons.Default.Handshake, contentDescription = null,
+                            tint = Color.White.copy(0.6f), modifier = Modifier.size(14.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text(
-                            "Bereits ausgeglichen",
-                            color = Color.White.copy(0.6f),
-                            fontSize = 10.sp
-                        )
+                        Text("Bereits ausgeglichen", color = Color.White.copy(0.6f), fontSize = 10.sp)
                     }
-                    Text(
-                        "-${formatCurrency(settlements)}",
-                        color = Color.White.copy(0.7f),
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 12.sp
-                    )
+                    Text("−${formatCurrency(settlements)}", color = Color.White.copy(0.7f), fontWeight = FontWeight.Bold, fontSize = 12.sp)
                 }
                 if (netAfterSettlements == 0.0) {
                     Spacer(Modifier.height(6.dp))
                     Text(
                         "✓ Split-Topf vollständig ausgeglichen",
-                        color = Color(0xFF86EFAC),
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.fillMaxWidth(),
-                        textAlign = TextAlign.Center
+                        color = Color(0xFF86EFAC), fontSize = 10.sp, fontWeight = FontWeight.Bold,
+                        modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center
                     )
                 }
             }
-
             if (splitExpenses == 0.0 && splitIncome == 0.0) {
                 Spacer(Modifier.height(10.dp))
                 Text(
-                    "Noch keine Split-Buchungen vorhanden. " +
-                    "Beim Buchen den Schalter 'Split-Topf' aktivieren.",
+                    "Noch keine Split-Buchungen vorhanden. Beim Buchen den Schalter 'Split-Topf' aktivieren.",
                     color = Color.White.copy(0.5f), fontSize = 10.sp,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth()
+                    textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()
                 )
             }
         }

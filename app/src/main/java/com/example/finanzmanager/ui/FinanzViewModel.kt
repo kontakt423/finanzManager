@@ -93,8 +93,9 @@ class FinanzViewModel(
             state.filter { it.isLoaded }.take(1).collect {
                 try {
                     repo.processStandingOrders()
+                    repo.processInterest()
                 } catch (e: Exception) {
-                    e.printStackTrace() // never crash the app over a standing-order error
+                    e.printStackTrace()
                 }
             }
         }
@@ -356,14 +357,21 @@ class FinanzViewModel(
     }
 
     // ---- Account CRUD ----
-    fun saveAccount(id: String?, name: String, balance: Double, category: String, type: String, icon: String) =
-        viewModelScope.launch {
-            val acc = Account(
-                id = id ?: UUID.randomUUID().toString().replace("-", "").take(9),
-                name = name, balance = balance, category = category, type = type, icon = icon
-            )
-            repo.upsertAccount(acc)
-        }
+    fun saveAccount(
+        id: String?, name: String, balance: Double, category: String, type: String, icon: String,
+        interestRate: Double = 0.0, interestInterval: String = "monthly", nextInterestRun: String = ""
+    ) = viewModelScope.launch {
+        val existing = if (id != null) repo.getAccountById(id) else null
+        val acc = Account(
+            id = id ?: UUID.randomUUID().toString().replace("-", "").take(9),
+            name = name, balance = balance, category = category, type = type, icon = icon,
+            history = existing?.history ?: emptyList(),
+            interestRate = interestRate,
+            interestInterval = interestInterval,
+            nextInterestRun = nextInterestRun
+        )
+        repo.upsertAccount(acc)
+    }
 
     fun deleteAccount(id: String) = viewModelScope.launch { repo.deleteAccount(id) }
 

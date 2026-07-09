@@ -38,6 +38,7 @@ sealed class Sheet {
     data class InvestmentDetail(val account: Account) : Sheet()
     data class EditCategory(val category: Category?) : Sheet()
     object SplitDetail : Sheet()
+    object Search : Sheet()
 }
 
 class MainActivity : ComponentActivity() {
@@ -124,7 +125,8 @@ fun FinanzManagerApp(vm: FinanzViewModel, state: UiState) {
                             activeSheet = Sheet.EditAccount(acc)
                     },
                     onInvestmentDetail = { activeSheet = Sheet.InvestmentDetail(it) },
-                    onSplitPotClick = { activeSheet = Sheet.SplitDetail }
+                    onSplitPotClick = { activeSheet = Sheet.SplitDetail },
+                    onSearch = { activeSheet = Sheet.Search }
                 )
                 ActiveTab.ANALYSIS -> AnalysisScreen(
                     state = state,
@@ -182,6 +184,11 @@ fun FinanzManagerApp(vm: FinanzViewModel, state: UiState) {
         is Sheet.SplitDetail -> SplitDetailSheet(
             state = state,
             vm = vm,
+            onEditTransaction = { activeSheet = Sheet.AddTransaction(it) },
+            onDismiss = { activeSheet = Sheet.None }
+        )
+        is Sheet.Search -> TransactionSearchSheet(
+            state = state,
             onEditTransaction = { activeSheet = Sheet.AddTransaction(it) },
             onDismiss = { activeSheet = Sheet.None }
         )
