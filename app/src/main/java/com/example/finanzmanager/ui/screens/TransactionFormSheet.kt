@@ -1,5 +1,6 @@
 package com.example.finanzmanager.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -68,36 +69,44 @@ fun TransactionFormSheet(
         else       -> Color(0xFFDC2626)
     }
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-        containerColor = MaterialTheme.colorScheme.surface
+    // Systemzurück (Back-Geste/Button) schließt das Fenster
+    BackHandler(onBack = onDismiss)
+
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.surface
     ) {
         Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .imePadding()   // prevents keyboard from pushing content off-screen
-                .padding(horizontal = 20.dp)
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+                .fillMaxSize()
+                .imePadding()   // Tastatur schiebt nur den Inhalt hoch – Fenster bleibt oben
         ) {
-            // ── Header ──────────────────────────────────────────────────
+            // ── Kopfzeile (fixiert oben) ─────────────────────────────────
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(start = 6.dp, end = 12.dp, top = 6.dp, bottom = 4.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
-                    Text(
-                        if (isOrder) "Dauerauftrag" else "Buchung",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Black
-                    )
-                    Text(
-                        if (initialTx != null || initialOrder != null) "Bearbeiten" else "Neu anlegen",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Default.Close, contentDescription = "Schließen")
+                    }
+                    Spacer(Modifier.width(4.dp))
+                    Column {
+                        Text(
+                            if (isOrder) "Dauerauftrag" else "Buchung",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Black
+                        )
+                        Text(
+                            if (initialTx != null || initialOrder != null) "Bearbeiten" else "Neu anlegen",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
                 if (initialTx != null || initialOrder != null) {
                     IconButton(onClick = {
@@ -114,7 +123,17 @@ fun TransactionFormSheet(
                 }
             }
 
-            // ── Einmalig / Dauerauftrag ──────────────────────────────────
+            // ── Scrollbarer Inhalt ───────────────────────────────────────
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp)
+                    .padding(top = 6.dp, bottom = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                // ── Einmalig / Dauerauftrag ──────────────────────────────────
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -392,39 +411,46 @@ fun TransactionFormSheet(
                 )
             }
 
-            // ── Speichern ─────────────────────────────────────────────────
-            Button(
-                onClick = {
-                    val amt = amount.parseLocalDouble() ?: return@Button
-                    if (isOrder) {
-                        vm.saveStandingOrder(
-                            id = initialOrder?.id, type = txType, amount = amt,
-                            description = description, categoryId = categoryId,
-                            accountId = accountId, toAccountId = toAccountId.ifBlank { null },
-                            isSplit = isSplit, splitMode = splitMode,
-                            interval = interval, nextRun = nextRun
-                        )
-                    } else {
-                        vm.saveTransaction(
-                            id = initialTx?.id, type = txType, amount = amt,
-                            description = description, categoryId = categoryId,
-                            accountId = accountId, toAccountId = toAccountId.ifBlank { null },
-                            isSplit = isSplit, splitMode = splitMode, date = date,
-                            isSettlement = isSettlement
-                        )
-                    }
-                    onDismiss()
-                },
-                modifier = Modifier.fillMaxWidth().height(54.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = typeColor)
-            ) {
-                Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("Speichern", fontWeight = FontWeight.Black, fontSize = 15.sp)
-            }
+                Spacer(Modifier.height(4.dp))
+            }   // Ende scrollbarer Inhalt
 
-            Spacer(Modifier.height(16.dp))
+            // ── Speichern (fixiert unten, bleibt über der Tastatur) ──────
+            Surface(color = MaterialTheme.colorScheme.surface, shadowElevation = 8.dp) {
+                Button(
+                    onClick = {
+                        val amt = amount.parseLocalDouble() ?: return@Button
+                        if (isOrder) {
+                            vm.saveStandingOrder(
+                                id = initialOrder?.id, type = txType, amount = amt,
+                                description = description, categoryId = categoryId,
+                                accountId = accountId, toAccountId = toAccountId.ifBlank { null },
+                                isSplit = isSplit, splitMode = splitMode,
+                                interval = interval, nextRun = nextRun
+                            )
+                        } else {
+                            vm.saveTransaction(
+                                id = initialTx?.id, type = txType, amount = amt,
+                                description = description, categoryId = categoryId,
+                                accountId = accountId, toAccountId = toAccountId.ifBlank { null },
+                                isSplit = isSplit, splitMode = splitMode, date = date,
+                                isSettlement = isSettlement
+                            )
+                        }
+                        onDismiss()
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 12.dp)
+                        .navigationBarsPadding()
+                        .height(54.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = typeColor)
+                ) {
+                    Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Speichern", fontWeight = FontWeight.Black, fontSize = 15.sp)
+                }
+            }
         }
     }
 }
