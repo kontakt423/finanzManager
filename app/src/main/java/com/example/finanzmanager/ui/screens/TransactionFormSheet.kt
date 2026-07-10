@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -215,6 +216,46 @@ fun TransactionFormSheet(
                             color = if (txType == type) Color.White
                                     else MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                    }
+                }
+            }
+
+            // Vorlage wählen (nur bei neuer Einmal-Buchung) – füllt das Formular
+            if (initialTx == null && !isOrder && state.templates.isNotEmpty()) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        "VORLAGE WÄHLEN",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.Bold, fontSize = 9.sp, letterSpacing = 1.sp
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        state.templates.forEach { tpl ->
+                            AssistChip(
+                                onClick = {
+                                    txType = tpl.type
+                                    amount = if (tpl.amount == 0.0) "" else tpl.amount.toString()
+                                    description = tpl.description
+                                    categoryId = tpl.categoryId
+                                    accountId = tpl.accountId
+                                    toAccountId = tpl.toAccountId ?: ""
+                                    isSplit = tpl.isSplit
+                                    splitMode = tpl.splitMode
+                                    categoryManuallySet = true
+                                },
+                                label = {
+                                    Text("${tpl.name} · ${formatCurrency(tpl.amount)}",
+                                        fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Default.Bolt, contentDescription = null,
+                                        modifier = Modifier.size(16.dp))
+                                }
+                            )
+                        }
                     }
                 }
             }
