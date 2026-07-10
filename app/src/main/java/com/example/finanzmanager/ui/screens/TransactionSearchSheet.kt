@@ -51,23 +51,25 @@ fun TransactionSearchSheet(
         }.sortedByDescending { it.date }
     }
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-        containerColor = MaterialTheme.colorScheme.surface
-    ) {
-        Column(modifier = Modifier.fillMaxHeight(0.92f)) {
+    AnimatedWindow(onDismiss = onDismiss) { dismiss ->
+    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
+        Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
             // Header
             Row(
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp).fillMaxWidth(),
+                modifier = Modifier.padding(start = 6.dp, end = 20.dp, top = 4.dp, bottom = 4.dp).fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    "Buchungen suchen",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = dismiss) {
+                        Icon(Icons.Default.Close, contentDescription = "Schließen")
+                    }
+                    Text(
+                        "Buchungen suchen",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
                 if (results.isNotEmpty()) {
                     Text(
                         "${results.size} Treffer",
@@ -239,6 +241,7 @@ fun TransactionSearchSheet(
                 }
 
                 LazyColumn(
+                    modifier = Modifier.weight(1f),
                     contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
@@ -249,7 +252,7 @@ fun TransactionSearchSheet(
                             category = cat,
                             onClick = {
                                 onEditTransaction(tx)
-                                onDismiss()
+                                dismiss()
                             }
                         )
                     }
@@ -257,5 +260,6 @@ fun TransactionSearchSheet(
                 }
             }
         }
+    }
     }
 }

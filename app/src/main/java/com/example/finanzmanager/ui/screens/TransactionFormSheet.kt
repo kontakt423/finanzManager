@@ -82,9 +82,7 @@ fun TransactionFormSheet(
         else       -> Color(0xFFDC2626)
     }
 
-    // Systemzurück (Back-Geste/Button) schließt das Fenster
-    BackHandler(onBack = onDismiss)
-
+    AnimatedWindow(onDismiss = onDismiss) { dismiss ->
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.surface
@@ -104,7 +102,7 @@ fun TransactionFormSheet(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = onDismiss) {
+                    IconButton(onClick = dismiss) {
                         Icon(Icons.Default.Close, contentDescription = "Schließen")
                     }
                     Spacer(Modifier.width(4.dp))
@@ -125,7 +123,7 @@ fun TransactionFormSheet(
                     IconButton(onClick = {
                         initialTx?.id?.let { vm.deleteTransaction(it) }
                         initialOrder?.id?.let { vm.deleteStandingOrder(it) }
-                        onDismiss()
+                        dismiss()
                     }) {
                         Icon(
                             Icons.Default.Delete,
@@ -449,7 +447,7 @@ fun TransactionFormSheet(
                                 isSettlement = isSettlement
                             )
                         }
-                        onDismiss()
+                        dismiss()
                     },
                     modifier = Modifier
                         .fillMaxWidth()
@@ -465,6 +463,7 @@ fun TransactionFormSheet(
                 }
             }
         }
+    }
     }
 }
 

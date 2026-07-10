@@ -34,27 +34,11 @@ fun TemplateManagerSheet(
     onEdit: (Template) -> Unit,
     onDismiss: () -> Unit
 ) {
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-        containerColor = MaterialTheme.colorScheme.surface
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp)
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+    AnimatedWindow(onDismiss = onDismiss) { dismiss ->
+        FullScreenSheetScaffold(
+            title = "Schnellbuchungs-Vorlagen",
+            onClose = dismiss
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("Schnellbuchungs-Vorlagen", style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Black)
-            }
-
             if (state.templates.isEmpty()) {
                 Text(
                     "Noch keine Vorlagen. Lege häufige Buchungen als Vorlage an, um sie mit einem Tipp zu buchen.",
@@ -124,34 +108,12 @@ fun TemplateFormSheet(
     var isSplit     by remember { mutableStateOf(template?.isSplit ?: false) }
     var splitMode   by remember { mutableStateOf(template?.splitMode ?: "half") }
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-        containerColor = MaterialTheme.colorScheme.surface
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .imePadding()
-                .padding(horizontal = 20.dp)
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+    AnimatedWindow(onDismiss = onDismiss) { dismiss ->
+        FullScreenSheetScaffold(
+            title = if (template == null) "Neue Vorlage" else "Vorlage bearbeiten",
+            onClose = dismiss,
+            onDelete = template?.let { t -> { vm.deleteTemplate(t.id); dismiss() } }
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(if (template == null) "Neue Vorlage" else "Vorlage bearbeiten",
-                    style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black)
-                if (template != null) {
-                    IconButton(onClick = { vm.deleteTemplate(template.id); onDismiss() }) {
-                        Icon(Icons.Default.Delete, contentDescription = null,
-                            tint = MaterialTheme.colorScheme.error)
-                    }
-                }
-            }
-
             OutlinedTextField(
                 value = name, onValueChange = { name = it },
                 label = { Text("Vorlagenname (z. B. Tanken)") },
@@ -280,7 +242,7 @@ fun TemplateFormSheet(
                             accountId = accountId, toAccountId = toAccountId.ifBlank { null },
                             isSplit = isSplit, splitMode = splitMode
                         )
-                        onDismiss()
+                        dismiss()
                     }
                 },
                 modifier = Modifier.fillMaxWidth().height(52.dp),

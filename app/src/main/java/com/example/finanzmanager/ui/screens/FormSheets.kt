@@ -42,28 +42,12 @@ fun AccountFormSheet(
     var interestInterval by remember { mutableStateOf(account?.interestInterval ?: "monthly") }
     var nextInterestRun  by remember { mutableStateOf(account?.nextInterestRun ?: "") }
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-        containerColor = MaterialTheme.colorScheme.surface
-    ) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+    AnimatedWindow(onDismiss = onDismiss) { dismiss ->
+        FullScreenSheetScaffold(
+            title = "Konto",
+            onClose = dismiss,
+            onDelete = account?.let { acc -> { vm.deleteAccount(acc.id); dismiss() } }
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("Konto", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black)
-                if (account != null) {
-                    IconButton(onClick = { vm.deleteAccount(account.id); onDismiss() }) {
-                        Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error)
-                    }
-                }
-            }
-
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
@@ -232,7 +216,7 @@ fun AccountFormSheet(
                         interestInterval = interestInterval,
                         nextInterestRun = nextRun
                     )
-                    onDismiss()
+                    dismiss()
                 },
                 modifier = Modifier.fillMaxWidth().height(52.dp),
                 shape = RoundedCornerShape(16.dp)
@@ -254,18 +238,12 @@ fun InvestmentDetailSheet(
 ) {
     var newBalance by remember { mutableStateOf("") }
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-        containerColor = MaterialTheme.colorScheme.surface
-    ) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+    AnimatedWindow(onDismiss = onDismiss) { dismiss ->
+        FullScreenSheetScaffold(
+            title = "Investment",
+            onClose = dismiss,
+            titleColor = MaterialTheme.colorScheme.primary
         ) {
-            Text("Investment", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black,
-                color = MaterialTheme.colorScheme.primary)
-
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally
@@ -317,7 +295,7 @@ fun InvestmentDetailSheet(
             Button(
                 onClick = {
                     newBalance.parseLocalDouble()?.let { vm.updateInvestment(account, it) }
-                    onDismiss()
+                    dismiss()
                 },
                 modifier = Modifier.fillMaxWidth().height(52.dp),
                 shape = RoundedCornerShape(16.dp)
@@ -344,28 +322,12 @@ fun CategoryFormSheet(
     var color by remember { mutableStateOf(category?.color ?: defaultColors[0]) }
     var type by remember { mutableStateOf(category?.type ?: "expense") }
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-        containerColor = MaterialTheme.colorScheme.surface
-    ) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+    AnimatedWindow(onDismiss = onDismiss) { dismiss ->
+        FullScreenSheetScaffold(
+            title = "Kategorie",
+            onClose = dismiss,
+            onDelete = category?.let { cat -> { vm.deleteCategory(cat.id); dismiss() } }
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("Kategorie", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black)
-                if (category != null) {
-                    IconButton(onClick = { vm.deleteCategory(category.id); onDismiss() }) {
-                        Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error)
-                    }
-                }
-            }
-
             OutlinedTextField(
                 value = name, onValueChange = { name = it },
                 label = { Text("Name") }, modifier = Modifier.fillMaxWidth(),
@@ -400,7 +362,7 @@ fun CategoryFormSheet(
             )
 
             Button(
-                onClick = { vm.saveCategory(category?.id, name, color, type); onDismiss() },
+                onClick = { vm.saveCategory(category?.id, name, color, type); dismiss() },
                 modifier = Modifier.fillMaxWidth().height(52.dp),
                 shape = RoundedCornerShape(16.dp)
             ) {
