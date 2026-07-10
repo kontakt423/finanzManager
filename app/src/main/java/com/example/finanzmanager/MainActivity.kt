@@ -1,9 +1,11 @@
 package com.example.finanzmanager
 
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.fragment.app.FragmentActivity
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -23,22 +25,28 @@ import com.example.finanzmanager.data.repository.SettingsRepository
 import com.example.finanzmanager.domain.Account
 import com.example.finanzmanager.domain.Category
 import com.example.finanzmanager.domain.StandingOrder
+import com.example.finanzmanager.domain.Template
 import com.example.finanzmanager.domain.Transaction
+import com.example.finanzmanager.ocr.ReceiptScanScreen
+import com.example.finanzmanager.ocr.ScannedReceipt
 import com.example.finanzmanager.ui.*
 import com.example.finanzmanager.ui.screens.*
 import com.example.finanzmanager.ui.theme.FinanzManagerTheme
 
 sealed class Sheet {
     object None : Sheet()
-    data class AddTransaction(val tx: Transaction? = null) : Sheet()
+    data class AddTransaction(val tx: Transaction? = null, val template: Template? = null) : Sheet()
     data class AddStandingOrder(val order: StandingOrder? = null) : Sheet()
     data class EditAccount(val account: Account?) : Sheet()
     data class InvestmentDetail(val account: Account) : Sheet()
     data class EditCategory(val category: Category?) : Sheet()
     object SplitDetail : Sheet()
+    object Search : Sheet()
+    object ManageTemplates : Sheet()
+    data class EditTemplate(val template: Template? = null) : Sheet()
 }
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
@@ -51,7 +59,24 @@ class MainActivity : ComponentActivity() {
             val state by vm.state.collectAsStateWithLifecycle()
 
             FinanzManagerTheme(darkTheme = state.isDarkMode) {
+                // App-Sperre: bei aktivierter Biometrie erst nach Authentifizierung entsperren
+                var unlocked by remember { mutableStateOf(false) }
+                DisposableEffect(Unit) {
+                    val observer = LifecycleEventObserver { _, event ->
+                        if (event == Lifecycle.Event.ON_STOP) unlocked = false
+                    }
+                    lifecycle.addObserver(observer)
+                    onDispose { lifecycle.removeObserver(observer) }
+                }
+                val locked = state.appLockEnabled && !unlocked
+                val authenticate = { showBiometricPrompt(onSuccess = { unlocked = true }) }
+
                 FinanzManagerApp(vm = vm, state = state)
+
+                if (locked) {
+                    AppLockScreen(onUnlock = authenticate)
+                    LaunchedEffect(Unit) { authenticate() }
+                }
             }
         }
     }
@@ -61,6 +86,8 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun FinanzManagerApp(vm: FinanzViewModel, state: UiState) {
     var activeSheet by remember { mutableStateOf<Sheet>(Sheet.None) }
+    var scannerActive by remember { mutableStateOf(false) }
+    var scannedResult by remember { mutableStateOf<ScannedReceipt?>(null) }
 
     val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(state.snackbarMessage) {
@@ -120,7 +147,10 @@ fun FinanzManagerApp(vm: FinanzViewModel, state: UiState) {
                             activeSheet = Sheet.EditAccount(acc)
                     },
                     onInvestmentDetail = { activeSheet = Sheet.InvestmentDetail(it) },
-                    onSplitPotClick = { activeSheet = Sheet.SplitDetail }
+                    onSplitPotClick = { activeSheet = Sheet.SplitDetail },
+                    onSearch = { activeSheet = Sheet.Search },
+                    onUseTemplate = { activeSheet = Sheet.AddTransaction(template = it) },
+                    onManageTemplates = { activeSheet = Sheet.ManageTemplates }
                 )
                 ActiveTab.ANALYSIS -> AnalysisScreen(
                     state = state,
@@ -134,7 +164,8 @@ fun FinanzManagerApp(vm: FinanzViewModel, state: UiState) {
                     onEditAccount = { activeSheet = Sheet.EditAccount(it) },
                     onAddAccount = { activeSheet = Sheet.EditAccount(null) },
                     onEditCategory = { activeSheet = Sheet.EditCategory(it) },
-                    onAddCategory = { activeSheet = Sheet.EditCategory(null) }
+                    onAddCategory = { activeSheet = Sheet.EditCategory(null) },
+                    onManageTemplates = { activeSheet = Sheet.ManageTemplates }
                 )
             }
         }
@@ -145,8 +176,17 @@ fun FinanzManagerApp(vm: FinanzViewModel, state: UiState) {
         is Sheet.AddTransaction -> TransactionFormSheet(
             initialTx = sheet.tx,
             isStandingOrder = false,
+            scanned = scannedResult,
+            template = sheet.template,
+            onScanReceipt = {
+                activeSheet = Sheet.None
+                scannerActive = true
+            },
             state = state, vm = vm,
-            onDismiss = { activeSheet = Sheet.None }
+            onDismiss = {
+                activeSheet = Sheet.None
+                scannedResult = null
+            }
         )
         is Sheet.AddStandingOrder -> TransactionFormSheet(
             initialTx = null,
@@ -173,7 +213,37 @@ fun FinanzManagerApp(vm: FinanzViewModel, state: UiState) {
             onEditTransaction = { activeSheet = Sheet.AddTransaction(it) },
             onDismiss = { activeSheet = Sheet.None }
         )
+        is Sheet.Search -> TransactionSearchSheet(
+            state = state,
+            onEditTransaction = { activeSheet = Sheet.AddTransaction(it) },
+            onDismiss = { activeSheet = Sheet.None }
+        )
+        is Sheet.ManageTemplates -> TemplateManagerSheet(
+            state = state,
+            vm = vm,
+            onAdd = { activeSheet = Sheet.EditTemplate(null) },
+            onEdit = { activeSheet = Sheet.EditTemplate(it) },
+            onDismiss = { activeSheet = Sheet.None }
+        )
+        is Sheet.EditTemplate -> TemplateFormSheet(
+            template = sheet.template,
+            state = state,
+            vm = vm,
+            onDismiss = { activeSheet = Sheet.ManageTemplates }
+        )
         Sheet.None -> Unit
+    }
+
+    // Vollbild-Kamerascan (liegt über allem)
+    if (scannerActive) {
+        ReceiptScanScreen(
+            onDismiss = { scannerActive = false },
+            onResult = { receipt ->
+                scannerActive = false
+                scannedResult = receipt
+                activeSheet = Sheet.AddTransaction()
+            }
+        )
     }
 }
 

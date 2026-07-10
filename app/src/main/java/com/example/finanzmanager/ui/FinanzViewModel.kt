@@ -23,7 +23,9 @@ data class UiState(
     val transactions: List<Transaction> = emptyList(),
     val categories: List<Category> = emptyList(),
     val standingOrders: List<StandingOrder> = emptyList(),
+    val templates: List<Template> = emptyList(),
     val isDarkMode: Boolean = true,
+    val appLockEnabled: Boolean = false,
     val splitPotEnabled: Boolean = true,
     val countFullSplitIncome: Boolean = false,
     val splitPotStartDate: String = "",   // "" = all time, "yyyy-MM-dd" = from that date
@@ -85,6 +87,16 @@ class FinanzViewModel(
             }
         }
         viewModelScope.launch {
+            repo.templates.collect { tpls ->
+                _state.update { it.copy(templates = tpls) }
+            }
+        }
+        viewModelScope.launch {
+            settings.appLockEnabled.collect { enabled ->
+                _state.update { it.copy(appLockEnabled = enabled) }
+            }
+        }
+        viewModelScope.launch {
             repo.seedDefaultData()
         }
         viewModelScope.launch {
@@ -93,8 +105,9 @@ class FinanzViewModel(
             state.filter { it.isLoaded }.take(1).collect {
                 try {
                     repo.processStandingOrders()
+                    repo.processInterest()
                 } catch (e: Exception) {
-                    e.printStackTrace() // never crash the app over a standing-order error
+                    e.printStackTrace()
                 }
             }
         }
@@ -356,14 +369,21 @@ class FinanzViewModel(
     }
 
     // ---- Account CRUD ----
-    fun saveAccount(id: String?, name: String, balance: Double, category: String, type: String, icon: String) =
-        viewModelScope.launch {
-            val acc = Account(
-                id = id ?: UUID.randomUUID().toString().replace("-", "").take(9),
-                name = name, balance = balance, category = category, type = type, icon = icon
-            )
-            repo.upsertAccount(acc)
-        }
+    fun saveAccount(
+        id: String?, name: String, balance: Double, category: String, type: String, icon: String,
+        interestRate: Double = 0.0, interestInterval: String = "monthly", nextInterestRun: String = ""
+    ) = viewModelScope.launch {
+        val existing = if (id != null) repo.getAccountById(id) else null
+        val acc = Account(
+            id = id ?: UUID.randomUUID().toString().replace("-", "").take(9),
+            name = name, balance = balance, category = category, type = type, icon = icon,
+            history = existing?.history ?: emptyList(),
+            interestRate = interestRate,
+            interestInterval = interestInterval,
+            nextInterestRun = nextInterestRun
+        )
+        repo.upsertAccount(acc)
+    }
 
     fun deleteAccount(id: String) = viewModelScope.launch { repo.deleteAccount(id) }
 
@@ -419,6 +439,44 @@ class FinanzViewModel(
 
     fun deleteStandingOrder(id: String) = viewModelScope.launch { repo.deleteStandingOrder(id) }
 
+    // ---- Templates CRUD ----
+    fun saveTemplate(
+        id: String?, name: String, type: String, amount: Double, description: String,
+        categoryId: String, accountId: String, toAccountId: String?,
+        isSplit: Boolean, splitMode: String
+    ) = viewModelScope.launch {
+        val template = Template(
+            id = id ?: UUID.randomUUID().toString().replace("-", "").take(9),
+            name = name, type = type, amount = amount, description = description,
+            categoryId = categoryId, accountId = accountId, toAccountId = toAccountId,
+            isSplit = isSplit, splitMode = splitMode
+        )
+        repo.upsertTemplate(template)
+    }
+
+    fun deleteTemplate(id: String) = viewModelScope.launch { repo.deleteTemplate(id) }
+
+    /**
+     * Schlägt anhand früherer Buchungen die zuletzt genutzte Kategorie für eine
+     * Beschreibung vor (z. B. "REWE" → "Essen"). Erst exakte, dann Teil-Treffer.
+     */
+    fun suggestCategory(description: String, type: String): String? {
+        val query = description.trim()
+        if (query.length < 2 || type == "transfer") return null
+        val candidates = _state.value.transactions.filter {
+            it.type == type && it.categoryId.isNotBlank() && it.description.isNotBlank()
+        }
+        candidates.filter { it.description.trim().equals(query, ignoreCase = true) }
+            .maxByOrNull { it.date }?.let { return it.categoryId }
+        return candidates.filter {
+            val d = it.description.trim()
+            d.contains(query, ignoreCase = true) || query.contains(d, ignoreCase = true)
+        }.maxByOrNull { it.date }?.categoryId
+    }
+
+    // ---- App-Sperre ----
+    fun setAppLock(enabled: Boolean) = viewModelScope.launch { settings.setAppLockEnabled(enabled) }
+
     // ---- Export / Import ----
     fun exportData(context: Context, onResult: (Uri?) -> Unit) = viewModelScope.launch {
         val s = _state.value
@@ -427,7 +485,7 @@ class FinanzViewModel(
             "splitPotEnabled" to s.splitPotEnabled,
             "countFullSplitIncome" to s.countFullSplitIncome
         )
-        val json = repo.exportToJson(s.accounts, s.transactions, s.categories, s.standingOrders, settingsMap)
+        val json = repo.exportToJson(s.accounts, s.transactions, s.categories, s.standingOrders, s.templates, settingsMap)
         try {
             val fileName = "FinanzBackup_${today()}.json"
             val file = java.io.File(context.cacheDir, fileName)

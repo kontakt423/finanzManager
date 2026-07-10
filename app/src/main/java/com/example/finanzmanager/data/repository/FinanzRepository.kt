@@ -1,5 +1,6 @@
 package com.example.finanzmanager.data.repository
 
+import androidx.room.withTransaction
 import com.example.finanzmanager.data.*
 import com.example.finanzmanager.data.database.AppDatabase
 import com.example.finanzmanager.domain.*
@@ -8,6 +9,8 @@ import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.UUID
@@ -26,6 +29,8 @@ class FinanzRepository(private val db: AppDatabase) {
         db.categoryDao().getAll().map { it.map { e -> e.toDomain() } }
     val standingOrders: Flow<List<StandingOrder>> =
         db.standingOrderDao().getAll().map { it.map { e -> e.toDomain() } }
+    val templates: Flow<List<Template>> =
+        db.templateDao().getAll().map { it.map { e -> e.toDomain() } }
 
     // ── Accounts ─────────────────────────────────────────────────────────────
     suspend fun upsertAccount(account: Account) = db.accountDao().insert(account.toEntity())
@@ -54,22 +59,66 @@ class FinanzRepository(private val db: AppDatabase) {
     suspend fun getAllStandingOrdersSync(): List<StandingOrder> =
         db.standingOrderDao().getAllSync().map { it.toDomain() }
 
+    // ── Templates ─────────────────────────────────────────────────────────────
+    suspend fun upsertTemplate(template: Template) = db.templateDao().insert(template.toEntity())
+    suspend fun deleteTemplate(id: String) = db.templateDao().deleteById(id)
+
+    // ── Interest Processing ───────────────────────────────────────────────────
+    suspend fun processInterest() {
+        val today = LocalDate.now().format(fmt)
+        val accounts = db.accountDao().getAllSync().map { it.toDomain() }
+
+        for (acc in accounts) {
+            if (acc.interestRate <= 0.0 || acc.nextInterestRun.isEmpty()) continue
+            if (acc.nextInterestRun > today) continue
+
+            var currentRun = acc.nextInterestRun
+            var iterations = 0
+
+            while (currentRun <= today && iterations < 120) {
+                iterations++
+                val periodRate = when (acc.interestInterval) {
+                    "quarterly" -> acc.interestRate / 4.0 / 100.0
+                    "yearly"    -> acc.interestRate / 100.0
+                    else        -> acc.interestRate / 12.0 / 100.0  // monthly
+                }
+                val fresh = getAccountById(acc.id) ?: break
+                val interest = round(fresh.balance * periodRate)
+                if (interest > 0) {
+                    val tx = Transaction(
+                        id = UUID.randomUUID().toString().replace("-", "").take(9),
+                        type = "income",
+                        amount = interest,
+                        description = "Zinsen (${acc.interestRate}% p.a.)",
+                        categoryId = "",
+                        accountId = acc.id,
+                        date = currentRun
+                    )
+                    db.transactionDao().insert(tx.toEntity())
+                    updateAccountBalance(acc.id, round(fresh.balance + interest))
+                }
+                currentRun = advanceDate(currentRun, acc.interestInterval)
+            }
+
+            if (currentRun != acc.nextInterestRun) {
+                db.accountDao().insert(acc.copy(nextInterestRun = currentRun).toEntity())
+            }
+        }
+    }
+
     // ── Standing Order Processing ─────────────────────────────────────────────
-    // Returns true if any changes were made (so ViewModel knows to refresh from DB)
-    suspend fun processStandingOrders(): Boolean {
+    suspend fun processStandingOrders(): Boolean = processingLock.withLock {
         val today = LocalDate.now().format(fmt)
         val orders = getAllStandingOrdersSync()
         var hasChanges = false
 
         for (order in orders) {
             var currentRun = order.nextRun
-            // Safety cap: never create more than 366 entries per order per run
             var iterations = 0
             while (currentRun <= today && iterations < 366) {
                 iterations++
                 hasChanges = true
 
-                // Build transaction
                 val tx = Transaction(
                     id = UUID.randomUUID().toString().replace("-", "").take(9),
                     type = order.type,
@@ -84,7 +133,6 @@ class FinanzRepository(private val db: AppDatabase) {
                 )
                 db.transactionDao().insert(tx.toEntity())
 
-                // Update account balance using FRESH DB read (avoids stale snapshot bug)
                 when (order.type) {
                     "expense" -> getAccountById(order.accountId)?.let { acc ->
                         updateAccountBalance(acc.id, round(acc.balance - order.amount))
@@ -107,7 +155,6 @@ class FinanzRepository(private val db: AppDatabase) {
                 currentRun = advanceDate(currentRun, order.interval)
             }
 
-            // Update nextRun in DB if we advanced it
             if (currentRun != order.nextRun) {
                 db.standingOrderDao().insert(order.copy(nextRun = currentRun).toEntity())
             }
@@ -147,22 +194,17 @@ class FinanzRepository(private val db: AppDatabase) {
     suspend fun exportToJson(
         accounts: List<Account>, transactions: List<Transaction>,
         categories: List<Category>, standingOrders: List<StandingOrder>,
-        settings: Map<String, Any>
+        templates: List<Template>, settings: Map<String, Any>
     ): String = gson.toJson(mapOf(
         "accounts" to accounts, "transactions" to transactions,
         "categories" to categories, "standingOrders" to standingOrders,
-        "settings" to settings
+        "templates" to templates, "settings" to settings
     ))
 
     suspend fun importFromJson(json: String): Boolean {
         return try {
             val mapType = object : TypeToken<Map<String, Any>>() {}.type
             val data: Map<String, Any> = gson.fromJson(json, mapType)
-
-            db.accountDao().deleteAll()
-            db.transactionDao().deleteAll()
-            db.categoryDao().deleteAll()
-            db.standingOrderDao().deleteAll()
 
             fun <T> parseList(key: String, clazz: Class<T>): List<T> {
                 val raw = data[key] ?: return emptyList()
@@ -171,14 +213,42 @@ class FinanzRepository(private val db: AppDatabase) {
                     TypeToken.getParameterized(List::class.java, clazz).type) ?: emptyList()
             }
 
-            parseList("accounts",       Account::class.java)
-                .forEach { db.accountDao().insert(it.toEntity()) }
-            parseList("transactions",   Transaction::class.java)
-                .forEach { db.transactionDao().insert(it.toEntity()) }
-            parseList("categories",     Category::class.java)
-                .forEach { db.categoryDao().insert(it.toEntity()) }
-            parseList("standingOrders", StandingOrder::class.java)
-                .forEach { db.standingOrderDao().insert(it.toEntity()) }
+            // Apply safe defaults for fields that may be absent in older backups.
+            // Gson sets missing non-nullable Kotlin fields to null at runtime, which
+            // causes Room NOT NULL constraint failures without these guards.
+            val accounts = parseList("accounts", Account::class.java).map { acc ->
+                acc.copy(
+                    interestInterval = acc.interestInterval ?: "monthly",
+                    nextInterestRun  = acc.nextInterestRun  ?: ""
+                )
+            }
+            val transactions = parseList("transactions", Transaction::class.java).map { tx ->
+                tx.copy(
+                    splitMode    = tx.splitMode    ?: "half",
+                    toAccountId  = tx.toAccountId,     // nullable — already safe
+                    categoryId   = tx.categoryId   ?: ""
+                )
+            }
+            val categories     = parseList("categories",    Category::class.java)
+            val standingOrders = parseList("standingOrders", StandingOrder::class.java).map { o ->
+                o.copy(splitMode = o.splitMode ?: "half")
+            }
+            val templates = parseList("templates", Template::class.java).map { t ->
+                t.copy(splitMode = t.splitMode ?: "half")
+            }
+
+            db.withTransaction {
+                db.accountDao().deleteAll()
+                db.transactionDao().deleteAll()
+                db.categoryDao().deleteAll()
+                db.standingOrderDao().deleteAll()
+                db.templateDao().deleteAll()
+                accounts.forEach       { db.accountDao().insert(it.toEntity()) }
+                transactions.forEach   { db.transactionDao().insert(it.toEntity()) }
+                categories.forEach     { db.categoryDao().insert(it.toEntity()) }
+                standingOrders.forEach { db.standingOrderDao().insert(it.toEntity()) }
+                templates.forEach      { db.templateDao().insert(it.toEntity()) }
+            }
             true
         } catch (e: Exception) {
             e.printStackTrace()
@@ -188,5 +258,6 @@ class FinanzRepository(private val db: AppDatabase) {
 
     companion object {
         fun round(v: Double): Double = Math.round(v * 100.0) / 100.0
+        private val processingLock = Mutex()
     }
 }

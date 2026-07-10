@@ -12,6 +12,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -71,12 +72,8 @@ fun SplitDetailSheet(
     }
     val net = splitExpenses - splitIncome
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-        containerColor = MaterialTheme.colorScheme.surface,
-        modifier = Modifier.fillMaxHeight(0.92f)
-    ) {
+    AnimatedWindow(onDismiss = onDismiss) { dismiss ->
+    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
         Column(modifier = Modifier.fillMaxSize()) {
 
             // ── Header ───────────────────────────────────────────────────────
@@ -84,7 +81,8 @@ fun SplitDetailSheet(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(Color(0xFF5B21B6))
-                    .padding(horizontal = 20.dp, vertical = 20.dp)
+                    .statusBarsPadding()
+                    .padding(horizontal = 20.dp, vertical = 16.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -92,6 +90,10 @@ fun SplitDetailSheet(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = dismiss) {
+                            Icon(Icons.Default.Close, contentDescription = "Schließen", tint = Color.White)
+                        }
+                        Spacer(Modifier.width(2.dp))
                         Icon(
                             Icons.Default.CallSplit,
                             contentDescription = null,
@@ -235,7 +237,8 @@ fun SplitDetailSheet(
             if (allSplitTxs.isEmpty()) {
                 Box(
                     modifier = Modifier
-                        .fillMaxSize()
+                        .fillMaxWidth()
+                        .weight(1f)
                         .padding(32.dp),
                     contentAlignment = Alignment.Center
                 ) {
@@ -263,7 +266,7 @@ fun SplitDetailSheet(
                 LazyColumn(
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(0.dp),
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxWidth().weight(1f)
                 ) {
                     if (expTxs.isNotEmpty()) {
                         item {
@@ -278,7 +281,7 @@ fun SplitDetailSheet(
                             SplitTransactionRow(
                                 tx = tx,
                                 category = cat,
-                                onClick = { onEditTransaction(tx); onDismiss() }
+                                onClick = { onEditTransaction(tx); dismiss() }
                             )
                         }
                         item { Spacer(Modifier.height(16.dp)) }
@@ -297,7 +300,7 @@ fun SplitDetailSheet(
                             SplitTransactionRow(
                                 tx = tx,
                                 category = cat,
-                                onClick = { onEditTransaction(tx); onDismiss() }
+                                onClick = { onEditTransaction(tx); dismiss() }
                             )
                         }
                     }
@@ -306,6 +309,7 @@ fun SplitDetailSheet(
                 }
             }
         }
+    }
     }
 }
 

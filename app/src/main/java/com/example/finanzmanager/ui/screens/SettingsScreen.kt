@@ -14,7 +14,6 @@ import java.time.format.DateTimeFormatter
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -32,6 +31,7 @@ import com.example.finanzmanager.domain.Account
 import com.example.finanzmanager.domain.Category
 import com.example.finanzmanager.ui.FinanzViewModel
 import com.example.finanzmanager.ui.UiState
+import com.example.finanzmanager.ui.canUseBiometric
 import com.example.finanzmanager.ui.components.formatCurrency
 import com.example.finanzmanager.ui.components.parseHexColor
 import com.example.finanzmanager.ui.today
@@ -45,20 +45,19 @@ fun SettingsScreen(
     onAddAccount: () -> Unit,
     onEditCategory: (Category) -> Unit,
     onAddCategory: () -> Unit,
+    onManageTemplates: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     var showResetDialog by remember { mutableStateOf(false) }
     var showSplitStartDatePicker by remember { mutableStateOf(false) }
-    // Holds the JSON to write once the user picks a save location
     var pendingJsonToSave by remember { mutableStateOf<String?>(null) }
 
-    // ── Launcher 1: CreateDocument — lets user pick folder & filename ──────
+    // ── Launcher 1: CreateDocument ──────────────────────────────────────
     val createDocumentLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/json")
     ) { destUri: Uri? ->
         if (destUri == null) {
-            // User cancelled
             pendingJsonToSave = null
             return@rememberLauncherForActivityResult
         }
@@ -74,7 +73,7 @@ fun SettingsScreen(
         }
     }
 
-    // ── Launcher 2: Import — lets user pick a JSON file ───────────────────
+    // ── Launcher 2: Import ──────────────────────────────────────────────
     val importLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
@@ -88,39 +87,23 @@ fun SettingsScreen(
         }
     }
 
-    // ── Triggered when user taps "In Dokumente speichern" ────────────────
     fun saveToFile() {
         vm.exportData(context) { uri ->
-            if (uri == null) {
-                vm.showSnackbar("Export fehlgeschlagen")
-                return@exportData
-            }
+            if (uri == null) { vm.showSnackbar("Export fehlgeschlagen"); return@exportData }
             try {
-                // Read JSON from cache URI (FileProvider)
-                val json = context.contentResolver
-                    .openInputStream(uri)
-                    ?.bufferedReader()?.readText()
-                if (json.isNullOrBlank()) {
-                    vm.showSnackbar("Keine Daten zum Speichern")
-                    return@exportData
-                }
-                // Store JSON, then open system file picker
+                val json = context.contentResolver.openInputStream(uri)?.bufferedReader()?.readText()
+                if (json.isNullOrBlank()) { vm.showSnackbar("Keine Daten zum Speichern"); return@exportData }
                 pendingJsonToSave = json
-                val fileName = "FinanzBackup_${today()}.json"
-                createDocumentLauncher.launch(fileName)
+                createDocumentLauncher.launch("FinanzBackup_${today()}.json")
             } catch (e: Exception) {
                 vm.showSnackbar("Fehler: ${e.message}")
             }
         }
     }
 
-    // ── Triggered when user taps "Teilen" ────────────────────────────────
     fun shareBackup() {
         vm.exportData(context) { uri ->
-            if (uri == null) {
-                vm.showSnackbar("Export fehlgeschlagen")
-                return@exportData
-            }
+            if (uri == null) { vm.showSnackbar("Export fehlgeschlagen"); return@exportData }
             val intent = Intent(Intent.ACTION_SEND).apply {
                 type = "application/json"
                 putExtra(Intent.EXTRA_STREAM, uri)
@@ -131,24 +114,20 @@ fun SettingsScreen(
         }
     }
 
-    // Material3 DatePickerDialog for split pot start date
+    // Split-Topf DatePickerDialog
     if (showSplitStartDatePicker) {
         val fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd")
-        val currentDate = state.splitPotStartDate.takeIf { it.isNotBlank() }
-            ?: today()
+        val currentDate = state.splitPotStartDate.takeIf { it.isNotBlank() } ?: today()
         val initialMillis = try {
-            LocalDate.parse(currentDate, fmt)
-                .atStartOfDay(ZoneId.of("UTC")).toInstant().toEpochMilli()
+            LocalDate.parse(currentDate, fmt).atStartOfDay(ZoneId.of("UTC")).toInstant().toEpochMilli()
         } catch (e: Exception) { System.currentTimeMillis() }
-
         val pickerState = rememberDatePickerState(initialSelectedDateMillis = initialMillis)
         DatePickerDialog(
             onDismissRequest = { showSplitStartDatePicker = false },
             confirmButton = {
                 TextButton(onClick = {
                     pickerState.selectedDateMillis?.let { millis ->
-                        val picked = Instant.ofEpochMilli(millis)
-                            .atZone(ZoneId.of("UTC")).toLocalDate()
+                        val picked = Instant.ofEpochMilli(millis).atZone(ZoneId.of("UTC")).toLocalDate()
                         vm.setSplitPotStartDate(picked.format(fmt))
                         vm.showSnackbar("Split-Topf gilt ab ${picked.format(fmt)}")
                     }
@@ -156,19 +135,15 @@ fun SettingsScreen(
                 }) { Text("Übernehmen") }
             },
             dismissButton = {
-                TextButton(onClick = { showSplitStartDatePicker = false }) {
-                    Text("Abbrechen")
-                }
+                TextButton(onClick = { showSplitStartDatePicker = false }) { Text("Abbrechen") }
             }
-        ) {
-            DatePicker(state = pickerState)
-        }
+        ) { DatePicker(state = pickerState) }
     }
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         item {
             Text(
@@ -179,59 +154,108 @@ fun SettingsScreen(
             )
         }
 
-        // ── Darstellung ──────────────────────────────────────────────────────
+        // ── DARSTELLUNG ─────────────────────────────────────────────────
         item { SectionLabel("DARSTELLUNG") }
-
         item {
-            SettingsToggleItem(
-                icon = if (state.isDarkMode) Icons.Default.LightMode else Icons.Default.DarkMode,
-                title = "Dark Mode",
-                checked = state.isDarkMode,
-                onToggle = { vm.toggleDarkMode() }
-            )
+            SettingsGroup {
+                SettingsToggleItem(
+                    icon    = if (state.isDarkMode) Icons.Default.LightMode else Icons.Default.DarkMode,
+                    title   = "Dark Mode",
+                    checked = state.isDarkMode,
+                    onToggle = { vm.toggleDarkMode() }
+                )
+            }
         }
 
-        // ── Split-Topf ───────────────────────────────────────────────────────
+        // ── SICHERHEIT ──────────────────────────────────────────────────
+        item { SectionLabel("SICHERHEIT") }
+        item {
+            SettingsGroup {
+                SettingsToggleItem(
+                    icon     = Icons.Default.Fingerprint,
+                    title    = "App-Sperre (Biometrie)",
+                    subtitle = "Beim Öffnen per Fingerabdruck/Gesicht entsperren",
+                    checked  = state.appLockEnabled,
+                    onToggle = {
+                        if (!state.appLockEnabled) {
+                            if (canUseBiometric(context)) vm.setAppLock(true)
+                            else vm.showSnackbar("Keine Biometrie oder Geräte-PIN eingerichtet")
+                        } else {
+                            vm.setAppLock(false)
+                        }
+                    }
+                )
+            }
+        }
+
+        // ── SCHNELLBUCHUNG ──────────────────────────────────────────────
+        item { SectionLabel("SCHNELLBUCHUNG") }
+        item {
+            SettingsGroup {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(onClick = onManageTemplates)
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                        Icon(Icons.Default.Bolt, contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(12.dp))
+                        Column {
+                            Text("Vorlagen verwalten", fontWeight = FontWeight.SemiBold, fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.onSurface)
+                            Text("${state.templates.size} Vorlage(n)", fontSize = 10.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                    Icon(Icons.Default.ChevronRight, contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+                }
+            }
+        }
+
+        // ── SPLIT-TOPF ──────────────────────────────────────────────────
         item { SectionLabel("SPLIT-TOPF") }
-
         item {
-            SettingsToggleItem(
-                icon = Icons.Default.CallSplit,
-                title = "Split-Topf aktiviert",
-                checked = state.splitPotEnabled,
-                onToggle = { vm.toggleSplitPot() }
-            )
-        }
-        item {
-            SettingsToggleItem(
-                icon = Icons.Default.People,
-                title = "Split-Einnahmen voll zählen",
-                subtitle = "Sonst nur 50% im Gesamtsaldo",
-                checked = state.countFullSplitIncome,
-                onToggle = { vm.toggleCountFullSplitIncome() }
-            )
+            SettingsGroup {
+                SettingsToggleItem(
+                    icon    = Icons.Default.CallSplit,
+                    title   = "Split-Topf aktiviert",
+                    checked = state.splitPotEnabled,
+                    onToggle = { vm.toggleSplitPot() }
+                )
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 14.dp),
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
+                )
+                SettingsToggleItem(
+                    icon     = Icons.Default.People,
+                    title    = "Split-Einnahmen voll zählen",
+                    subtitle = "Sonst nur 50% im Gesamtsaldo",
+                    checked  = state.countFullSplitIncome,
+                    onToggle = { vm.toggleCountFullSplitIncome() }
+                )
+            }
         }
 
-        // ── Split-Topf Reset / Startdatum ────────────────────────────────────
+        // ── SPLIT-TOPF ZURÜCKSETZEN ──────────────────────────────────────
         item { SectionLabel("SPLIT-TOPF ZURÜCKSETZEN") }
-
         item {
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                )
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // Info text
                     Row(verticalAlignment = Alignment.Top) {
                         Icon(
-                            Icons.Default.Info,
-                            contentDescription = null,
+                            Icons.Default.Info, contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(15.dp).padding(top = 1.dp)
                         )
@@ -242,11 +266,9 @@ fun SettingsScreen(
                             "Überweisung, wenn der Topf bei Null starten soll.",
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            lineHeight = 15.sp
+                            lineHeight = 16.sp
                         )
                     }
-
-                    // Current start date display
                     val hasStartDate = state.splitPotStartDate.isNotBlank()
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -254,44 +276,28 @@ fun SettingsScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column {
+                            Text("Zählt ab", fontSize = 11.sp, fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface)
                             Text(
-                                "Zählt ab",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                if (hasStartDate) state.splitPotStartDate
-                                else "Alle Buchungen (kein Limit)",
+                                if (hasStartDate) state.splitPotStartDate else "Alle Buchungen (kein Limit)",
                                 fontSize = 12.sp,
                                 fontWeight = if (hasStartDate) FontWeight.Black else FontWeight.Normal,
-                                color = if (hasStartDate)
-                                    MaterialTheme.colorScheme.primary
-                                else
-                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                color = if (hasStartDate) MaterialTheme.colorScheme.primary
+                                        else MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
-
-                    // Action buttons
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(
                             onClick = { showSplitStartDatePicker = true },
                             modifier = Modifier.weight(1f),
                             shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFF5B21B6)
-                            )
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF5B21B6))
                         ) {
-                            Icon(
-                                Icons.Default.CalendarMonth,
-                                contentDescription = null,
-                                modifier = Modifier.size(15.dp)
-                            )
+                            Icon(Icons.Default.CalendarMonth, contentDescription = null, modifier = Modifier.size(15.dp))
                             Spacer(Modifier.width(6.dp))
                             Text("Datum wählen", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         }
-
                         if (hasStartDate) {
                             OutlinedButton(
                                 onClick = {
@@ -301,11 +307,7 @@ fun SettingsScreen(
                                 modifier = Modifier.weight(1f),
                                 shape = RoundedCornerShape(12.dp)
                             ) {
-                                Icon(
-                                    Icons.Default.RestartAlt,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(15.dp)
-                                )
+                                Icon(Icons.Default.RestartAlt, contentDescription = null, modifier = Modifier.size(15.dp))
                                 Spacer(Modifier.width(6.dp))
                                 Text("Zurücksetzen", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
@@ -315,99 +317,73 @@ fun SettingsScreen(
             }
         }
 
-        // ── Daten & Backup ───────────────────────────────────────────────────
+        // ── DATEN & BACKUP ───────────────────────────────────────────────
         item { SectionLabel("DATEN & BACKUP") }
-
         item {
-            // Info card explaining what each button does
             Card(
-                shape = RoundedCornerShape(14.dp),
+                shape = RoundedCornerShape(18.dp),
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
                 ),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Row(
-                    modifier = Modifier.padding(12.dp),
-                    verticalAlignment = Alignment.Top
-                ) {
+                Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.Top) {
                     Icon(
-                        Icons.Default.Info,
-                        contentDescription = null,
+                        Icons.Default.Info, contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(16.dp).padding(top = 1.dp)
+                        modifier = Modifier.size(15.dp).padding(top = 1.dp)
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        "\"Speichern\" öffnet den Dateibrowser — du wählst selbst wo die Datei abgelegt wird (z.B. Dokumente, Downloads oder Google Drive).",
+                        "\"Speichern\" öffnet den Dateibrowser — du wählst selbst wo " +
+                        "die Datei abgelegt wird (z.B. Dokumente, Downloads oder Google Drive).",
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurface,
-                        lineHeight = 15.sp
+                        lineHeight = 16.sp
                     )
                 }
             }
         }
-
         item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                // Save via system file picker (CreateDocument)
                 Button(
                     onClick = { saveToFile() },
                     modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary
-                    )
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                 ) {
-                    Icon(
-                        Icons.Default.SaveAlt,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp)
-                    )
+                    Icon(Icons.Default.SaveAlt, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(6.dp))
                     Text("Speichern", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
-
-                // Share via system share sheet
                 Button(
                     onClick = { shareBackup() },
                     modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.secondary
-                    )
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
                 ) {
-                    Icon(
-                        Icons.Default.Share,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp)
-                    )
+                    Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(6.dp))
                     Text("Teilen", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }
-
         item {
             OutlinedButton(
                 onClick = { importLauncher.launch("application/json") },
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp)
+                shape = RoundedCornerShape(14.dp)
             ) {
-                Icon(
-                    Icons.Default.Upload,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp)
-                )
+                Icon(Icons.Default.Upload, contentDescription = null, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(6.dp))
                 Text("Backup laden", fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
         }
 
-        // ── Konten ───────────────────────────────────────────────────────────
+        // ── KONTEN ───────────────────────────────────────────────────────
         item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -416,40 +392,42 @@ fun SettingsScreen(
             ) {
                 SectionLabel("KONTEN")
                 IconButton(onClick = onAddAccount) {
-                    Icon(
-                        Icons.Default.Add,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(20.dp)
-                    )
+                    Icon(Icons.Default.Add, contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                }
+            }
+        }
+        item {
+            SettingsGroup {
+                state.accounts.forEachIndexed { idx, acc ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onEditAccount(acc) }
+                            .padding(horizontal = 16.dp, vertical = 13.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(acc.name, fontWeight = FontWeight.SemiBold, fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurface)
+                        Text(
+                            formatCurrency(acc.balance),
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    if (idx < state.accounts.lastIndex) {
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 14.dp),
+                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
+                        )
+                    }
                 }
             }
         }
 
-        items(state.accounts) { acc ->
-            Card(
-                modifier = Modifier.fillMaxWidth().clickable { onEditAccount(acc) },
-                shape = RoundedCornerShape(14.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
-            ) {
-                Row(
-                    modifier = Modifier.padding(14.dp).fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(acc.name, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                    Text(
-                        formatCurrency(acc.balance),
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        }
-
-        // ── Kategorien ───────────────────────────────────────────────────────
+        // ── KATEGORIEN ───────────────────────────────────────────────────
         item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -458,16 +436,11 @@ fun SettingsScreen(
             ) {
                 SectionLabel("KATEGORIEN")
                 IconButton(onClick = onAddCategory) {
-                    Icon(
-                        Icons.Default.Add,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(20.dp)
-                    )
+                    Icon(Icons.Default.Add, contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
                 }
             }
         }
-
         item {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 state.categories.chunked(2).forEach { pair ->
@@ -476,14 +449,9 @@ fun SettingsScreen(
                             Card(
                                 modifier = Modifier.weight(1f).clickable { onEditCategory(cat) },
                                 shape = RoundedCornerShape(14.dp),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.surface
-                                )
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                             ) {
-                                Row(
-                                    modifier = Modifier.padding(12.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
+                                Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                                     Surface(
                                         modifier = Modifier.size(10.dp),
                                         shape = RoundedCornerShape(50),
@@ -491,11 +459,8 @@ fun SettingsScreen(
                                     ) {}
                                     Spacer(Modifier.width(8.dp))
                                     Text(
-                                        cat.name,
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        maxLines = 1,
-                                        color = MaterialTheme.colorScheme.onSurface
+                                        cat.name, fontSize = 10.sp, fontWeight = FontWeight.Bold,
+                                        maxLines = 1, color = MaterialTheme.colorScheme.onSurface
                                     )
                                 }
                             }
@@ -506,22 +471,15 @@ fun SettingsScreen(
             }
         }
 
-        // ── Reset ────────────────────────────────────────────────────────────
+        // ── RESET ───────────────────────────────────────────────────────
         item {
             if (showResetDialog) {
                 AlertDialog(
                     onDismissRequest = { showResetDialog = false },
                     title = { Text("Alle Daten löschen?") },
-                    text = {
-                        Text(
-                            "Diese Aktion ist unwiderruflich. Alle Konten, " +
-                            "Transaktionen und Einstellungen werden gelöscht."
-                        )
-                    },
+                    text = { Text("Diese Aktion ist unwiderruflich. Alle Konten, Transaktionen und Einstellungen werden gelöscht.") },
                     confirmButton = {
-                        TextButton(onClick = { showResetDialog = false }) {
-                            Text("Abbrechen")
-                        }
+                        TextButton(onClick = { showResetDialog = false }) { Text("Abbrechen") }
                     },
                     dismissButton = {
                         TextButton(onClick = { showResetDialog = false }) {
@@ -537,9 +495,7 @@ fun SettingsScreen(
                 Text(
                     "Daten zurücksetzen",
                     color = MaterialTheme.colorScheme.error.copy(alpha = 0.4f),
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 1.sp
+                    fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp
                 )
             }
         }
@@ -548,6 +504,7 @@ fun SettingsScreen(
     }
 }
 
+/** Shared label for settings sections */
 @Composable
 fun SectionLabel(text: String) {
     Text(
@@ -561,6 +518,18 @@ fun SectionLabel(text: String) {
     )
 }
 
+/** Card container that groups related settings items */
+@Composable
+fun SettingsGroup(content: @Composable ColumnScope.() -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(content = content)
+    }
+}
+
 @Composable
 fun SettingsToggleItem(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
@@ -569,42 +538,31 @@ fun SettingsToggleItem(
     checked: Boolean,
     onToggle: () -> Unit
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        )
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp).fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+            modifier = Modifier.weight(1f).padding(end = 8.dp)
         ) {
-            // Text area gets weight so it never pushes the Switch off screen
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.weight(1f).padding(end = 8.dp)
-            ) {
-                Icon(
-                    icon, contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(Modifier.width(10.dp))
-                Column {
-                    Text(title, fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 2)
-                    if (subtitle != null) {
-                        Text(
-                            subtitle,
-                            fontSize = 10.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 2
-                        )
-                    }
+            Icon(
+                icon, contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(Modifier.width(12.dp))
+            Column {
+                Text(title, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, maxLines = 2,
+                    color = MaterialTheme.colorScheme.onSurface)
+                if (subtitle != null) {
+                    Text(subtitle, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
                 }
             }
-            Switch(checked = checked, onCheckedChange = { onToggle() })
         }
+        Switch(checked = checked, onCheckedChange = { onToggle() })
     }
 }

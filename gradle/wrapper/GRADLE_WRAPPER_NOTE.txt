@@ -1,8 +1,0 @@
-The gradle-wrapper.jar is automatically downloaded by Android Studio
-when you first open the project. No manual download required.
-
-If building from command line, run:
-  gradle wrapper --gradle-version=8.9
-
-Or download from:
-  https://services.gradle.org/distributions/gradle-8.9-bin.zip

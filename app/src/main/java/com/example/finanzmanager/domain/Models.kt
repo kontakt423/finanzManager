@@ -7,7 +7,10 @@ data class Account(
     val category: String,
     val type: String,
     val icon: String,
-    val history: List<HistoryEntry> = emptyList()
+    val history: List<HistoryEntry> = emptyList(),
+    val interestRate: Double = 0.0,
+    val interestInterval: String = "monthly",
+    val nextInterestRun: String = ""
 )
 
 data class Transaction(
@@ -73,4 +76,17 @@ data class Analysis(
     val totalSplitExpenses: Double,  // all time - what partner owes you
     val totalSplitIncome: Double,    // all time - what you owe partner
     val totalSettlements: Double     // all time - already paid out
+)
+
+data class Template(
+    val id: String,
+    val name: String,
+    val type: String,         // "expense", "income", "transfer"
+    val amount: Double,
+    val description: String,
+    val categoryId: String,
+    val accountId: String,
+    val toAccountId: String? = null,
+    val isSplit: Boolean = false,
+    val splitMode: String = "half"
 )
