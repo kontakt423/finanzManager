@@ -77,3 +77,16 @@ data class Analysis(
     val totalSplitIncome: Double,    // all time - what you owe partner
     val totalSettlements: Double     // all time - already paid out
 )
+
+data class Template(
+    val id: String,
+    val name: String,
+    val type: String,         // "expense", "income", "transfer"
+    val amount: Double,
+    val description: String,
+    val categoryId: String,
+    val accountId: String,
+    val toAccountId: String? = null,
+    val isSplit: Boolean = false,
+    val splitMode: String = "half"
+)

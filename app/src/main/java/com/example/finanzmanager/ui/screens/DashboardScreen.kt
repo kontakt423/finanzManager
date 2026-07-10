@@ -2,9 +2,11 @@ package com.example.finanzmanager.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -38,6 +40,8 @@ fun DashboardScreen(
     onInvestmentDetail: (Account) -> Unit,
     onSplitPotClick: () -> Unit,
     onSearch: () -> Unit = {},
+    onUseTemplate: (Template) -> Unit = {},
+    onManageTemplates: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val filteredTxs = vm.filteredTransactions()
@@ -305,6 +309,55 @@ fun DashboardScreen(
             }
         }
 
+        // Schnellbuchung (Vorlagen)
+        if (state.templates.isNotEmpty()) {
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "SCHNELLBUCHUNG",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = FontWeight.Bold, fontSize = 9.sp, letterSpacing = 1.5.sp
+                        )
+                        Icon(
+                            Icons.Default.Tune,
+                            contentDescription = "Vorlagen verwalten",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp).clickable(onClick = onManageTemplates)
+                        )
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        state.templates.forEach { tpl ->
+                            AssistChip(
+                                onClick = { onUseTemplate(tpl) },
+                                label = {
+                                    Text(
+                                        "${tpl.name} · ${formatCurrency(tpl.amount)}",
+                                        fontSize = 12.sp, fontWeight = FontWeight.SemiBold
+                                    )
+                                },
+                                leadingIcon = {
+                                    Icon(
+                                        if (tpl.type == "income") Icons.Default.ArrowUpward
+                                        else Icons.Default.ArrowDownward,
+                                        contentDescription = null, modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
         // Recent Transactions
         item {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -366,13 +419,64 @@ fun DashboardScreen(
                 }
             }
         } else {
-            items(recentTxs.take(50)) { tx ->
+            items(recentTxs.take(50), key = { it.id }) { tx ->
                 val cat = state.categories.find { it.id == tx.categoryId }
-                TransactionItem(tx = tx, category = cat, onClick = { onEditTransaction(tx) })
+                SwipeableTransactionRow(
+                    tx = tx,
+                    category = cat,
+                    onEdit = { onEditTransaction(tx) },
+                    onDelete = { vm.deleteTransaction(tx.id) }
+                )
             }
         }
 
         item { Spacer(Modifier.height(80.dp)) }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SwipeableTransactionRow(
+    tx: Transaction,
+    category: Category?,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
+) {
+    val dismissState = rememberSwipeToDismissBoxState(
+        confirmValueChange = { value ->
+            when (value) {
+                SwipeToDismissBoxValue.EndToStart -> { onDelete(); true }   // links wischen = löschen
+                SwipeToDismissBoxValue.StartToEnd -> { onEdit(); false }    // rechts wischen = bearbeiten
+                else -> false
+            }
+        }
+    )
+    SwipeToDismissBox(
+        state = dismissState,
+        backgroundContent = {
+            val direction = dismissState.dismissDirection
+            val bg = when (direction) {
+                SwipeToDismissBoxValue.EndToStart -> Color(0xFFDC2626)
+                SwipeToDismissBoxValue.StartToEnd -> Color(0xFF1D4ED8)
+                else -> Color.Transparent
+            }
+            val icon = if (direction == SwipeToDismissBoxValue.EndToStart) Icons.Default.Delete else Icons.Default.Edit
+            val align = if (direction == SwipeToDismissBoxValue.EndToStart) Alignment.CenterEnd else Alignment.CenterStart
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(bg)
+                    .padding(horizontal = 22.dp),
+                contentAlignment = align
+            ) {
+                if (direction != SwipeToDismissBoxValue.Settled) {
+                    Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
+                }
+            }
+        }
+    ) {
+        TransactionItem(tx = tx, category = category, onClick = onEdit)
     }
 }
 

@@ -44,24 +44,37 @@ fun TransactionFormSheet(
     isStandingOrder: Boolean = false,
     initialOrder: StandingOrder? = null,
     scanned: ScannedReceipt? = null,
+    template: Template? = null,
     onScanReceipt: (() -> Unit)? = null,
     state: UiState,
     vm: FinanzViewModel,
     onDismiss: () -> Unit
 ) {
     var isOrder      by remember { mutableStateOf(isStandingOrder || initialOrder != null) }
-    var txType       by remember { mutableStateOf(initialTx?.type ?: initialOrder?.type ?: "expense") }
-    var amount       by remember { mutableStateOf((initialTx?.amount ?: initialOrder?.amount ?: scanned?.amount ?: 0.0).let { if (it == 0.0) "" else it.toString() }) }
-    var description  by remember { mutableStateOf(initialTx?.description ?: initialOrder?.description ?: scanned?.merchant ?: "") }
-    var categoryId   by remember { mutableStateOf(initialTx?.categoryId ?: initialOrder?.categoryId ?: state.categories.firstOrNull()?.id ?: "") }
-    var accountId    by remember { mutableStateOf(initialTx?.accountId ?: initialOrder?.accountId ?: state.accounts.find { it.name == "Girokonto" }?.id ?: state.accounts.firstOrNull()?.id ?: "") }
-    var toAccountId  by remember { mutableStateOf(initialTx?.toAccountId ?: initialOrder?.toAccountId ?: "") }
-    var isSplit      by remember { mutableStateOf(initialTx?.isSplit ?: initialOrder?.isSplit ?: false) }
+    var txType       by remember { mutableStateOf(initialTx?.type ?: initialOrder?.type ?: template?.type ?: "expense") }
+    var amount       by remember { mutableStateOf((initialTx?.amount ?: initialOrder?.amount ?: template?.amount ?: scanned?.amount ?: 0.0).let { if (it == 0.0) "" else it.toString() }) }
+    var description  by remember { mutableStateOf(initialTx?.description ?: initialOrder?.description ?: template?.description ?: scanned?.merchant ?: "") }
+    var categoryId   by remember { mutableStateOf(initialTx?.categoryId ?: initialOrder?.categoryId ?: template?.categoryId ?: state.categories.firstOrNull()?.id ?: "") }
+    var accountId    by remember { mutableStateOf(initialTx?.accountId ?: initialOrder?.accountId ?: template?.accountId ?: state.accounts.find { it.name == "Girokonto" }?.id ?: state.accounts.firstOrNull()?.id ?: "") }
+    var toAccountId  by remember { mutableStateOf(initialTx?.toAccountId ?: initialOrder?.toAccountId ?: template?.toAccountId ?: "") }
+    var isSplit      by remember { mutableStateOf(initialTx?.isSplit ?: initialOrder?.isSplit ?: template?.isSplit ?: false) }
     var isSettlement by remember { mutableStateOf(initialTx?.isSettlement ?: false) }
-    var splitMode    by remember { mutableStateOf(initialTx?.splitMode ?: initialOrder?.splitMode ?: "half") }
+    var splitMode    by remember { mutableStateOf(initialTx?.splitMode ?: initialOrder?.splitMode ?: template?.splitMode ?: "half") }
     var date         by remember { mutableStateOf(initialTx?.date ?: scanned?.date ?: today()) }
     var interval     by remember { mutableStateOf(initialOrder?.interval ?: "monthly") }
     var nextRun      by remember { mutableStateOf(initialOrder?.nextRun ?: today()) }
+
+    // Merkt sich, ob der Nutzer die Kategorie selbst gewählt hat – dann kein Auto-Vorschlag.
+    var categoryManuallySet by remember { mutableStateOf(initialTx != null || template != null) }
+
+    // Kategorie automatisch anhand früherer Buchungen vorschlagen (nur Neuanlage).
+    LaunchedEffect(description, txType) {
+        if (!categoryManuallySet && !isOrder && txType != "transfer") {
+            vm.suggestCategory(description, txType)?.let { suggested ->
+                if (suggested != categoryId) categoryId = suggested
+            }
+        }
+    }
 
     val typeColor = when (txType) {
         "income"   -> Color(0xFF059669)
@@ -328,7 +341,7 @@ fun TransactionFormSheet(
                         label = "Kategorie",
                         options = filteredCats.map { it.id to it.name },
                         selected = categoryId,
-                        onSelect = { categoryId = it },
+                        onSelect = { categoryId = it; categoryManuallySet = true },
                         modifier = Modifier.weight(1f)
                     )
                 }

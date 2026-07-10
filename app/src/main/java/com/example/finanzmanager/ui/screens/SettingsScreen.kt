@@ -31,6 +31,7 @@ import com.example.finanzmanager.domain.Account
 import com.example.finanzmanager.domain.Category
 import com.example.finanzmanager.ui.FinanzViewModel
 import com.example.finanzmanager.ui.UiState
+import com.example.finanzmanager.ui.canUseBiometric
 import com.example.finanzmanager.ui.components.formatCurrency
 import com.example.finanzmanager.ui.components.parseHexColor
 import com.example.finanzmanager.ui.today
@@ -44,6 +45,7 @@ fun SettingsScreen(
     onAddAccount: () -> Unit,
     onEditCategory: (Category) -> Unit,
     onAddCategory: () -> Unit,
+    onManageTemplates: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -162,6 +164,56 @@ fun SettingsScreen(
                     checked = state.isDarkMode,
                     onToggle = { vm.toggleDarkMode() }
                 )
+            }
+        }
+
+        // ── SICHERHEIT ──────────────────────────────────────────────────
+        item { SectionLabel("SICHERHEIT") }
+        item {
+            SettingsGroup {
+                SettingsToggleItem(
+                    icon     = Icons.Default.Fingerprint,
+                    title    = "App-Sperre (Biometrie)",
+                    subtitle = "Beim Öffnen per Fingerabdruck/Gesicht entsperren",
+                    checked  = state.appLockEnabled,
+                    onToggle = {
+                        if (!state.appLockEnabled) {
+                            if (canUseBiometric(context)) vm.setAppLock(true)
+                            else vm.showSnackbar("Keine Biometrie oder Geräte-PIN eingerichtet")
+                        } else {
+                            vm.setAppLock(false)
+                        }
+                    }
+                )
+            }
+        }
+
+        // ── SCHNELLBUCHUNG ──────────────────────────────────────────────
+        item { SectionLabel("SCHNELLBUCHUNG") }
+        item {
+            SettingsGroup {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(onClick = onManageTemplates)
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                        Icon(Icons.Default.Bolt, contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(12.dp))
+                        Column {
+                            Text("Vorlagen verwalten", fontWeight = FontWeight.SemiBold, fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.onSurface)
+                            Text("${state.templates.size} Vorlage(n)", fontSize = 10.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                    Icon(Icons.Default.ChevronRight, contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+                }
             }
         }
 

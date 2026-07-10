@@ -14,9 +14,10 @@ import com.example.finanzmanager.data.database.entities.*
         AccountEntity::class,
         TransactionEntity::class,
         CategoryEntity::class,
-        StandingOrderEntity::class
+        StandingOrderEntity::class,
+        TemplateEntity::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -24,6 +25,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun transactionDao(): TransactionDao
     abstract fun categoryDao(): CategoryDao
     abstract fun standingOrderDao(): StandingOrderDao
+    abstract fun templateDao(): TemplateDao
 
     companion object {
         @Volatile private var INSTANCE: AppDatabase? = null
@@ -64,6 +66,26 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        // Schnellbuchungs-Vorlagen
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS templates (
+                        id TEXT NOT NULL PRIMARY KEY,
+                        name TEXT NOT NULL,
+                        type TEXT NOT NULL,
+                        amount REAL NOT NULL,
+                        description TEXT NOT NULL,
+                        categoryId TEXT NOT NULL,
+                        accountId TEXT NOT NULL,
+                        toAccountId TEXT,
+                        isSplit INTEGER NOT NULL,
+                        splitMode TEXT NOT NULL
+                    )
+                """.trimIndent())
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -71,7 +93,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "finanzmanager_db"
                 )
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                 .fallbackToDestructiveMigration()
                 .build()
                 INSTANCE = instance

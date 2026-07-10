@@ -41,3 +41,10 @@ fun StandingOrderEntity.toDomain() = StandingOrder(
 fun StandingOrder.toEntity() = StandingOrderEntity(
     id, type, amount, description, categoryId, accountId, toAccountId, isSplit, splitMode, interval, nextRun
 )
+
+fun TemplateEntity.toDomain() = Template(
+    id, name, type, amount, description, categoryId, accountId, toAccountId, isSplit, splitMode
+)
+fun Template.toEntity() = TemplateEntity(
+    id, name, type, amount, description, categoryId, accountId, toAccountId, isSplit, splitMode
+)

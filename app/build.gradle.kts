@@ -65,5 +65,8 @@ dependencies {
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.androidx.camera.view)
     implementation(libs.mlkit.text.recognition)
+    // App-Sperre: Biometrie (benötigt FragmentActivity)
+    implementation(libs.androidx.biometric)
+    implementation(libs.androidx.fragment.ktx)
     debugImplementation(libs.androidx.ui.tooling)
 }

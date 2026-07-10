@@ -29,6 +29,8 @@ class FinanzRepository(private val db: AppDatabase) {
         db.categoryDao().getAll().map { it.map { e -> e.toDomain() } }
     val standingOrders: Flow<List<StandingOrder>> =
         db.standingOrderDao().getAll().map { it.map { e -> e.toDomain() } }
+    val templates: Flow<List<Template>> =
+        db.templateDao().getAll().map { it.map { e -> e.toDomain() } }
 
     // ── Accounts ─────────────────────────────────────────────────────────────
     suspend fun upsertAccount(account: Account) = db.accountDao().insert(account.toEntity())
@@ -56,6 +58,10 @@ class FinanzRepository(private val db: AppDatabase) {
     suspend fun deleteStandingOrder(id: String) = db.standingOrderDao().deleteById(id)
     suspend fun getAllStandingOrdersSync(): List<StandingOrder> =
         db.standingOrderDao().getAllSync().map { it.toDomain() }
+
+    // ── Templates ─────────────────────────────────────────────────────────────
+    suspend fun upsertTemplate(template: Template) = db.templateDao().insert(template.toEntity())
+    suspend fun deleteTemplate(id: String) = db.templateDao().deleteById(id)
 
     // ── Interest Processing ───────────────────────────────────────────────────
     suspend fun processInterest() {
@@ -188,11 +194,11 @@ class FinanzRepository(private val db: AppDatabase) {
     suspend fun exportToJson(
         accounts: List<Account>, transactions: List<Transaction>,
         categories: List<Category>, standingOrders: List<StandingOrder>,
-        settings: Map<String, Any>
+        templates: List<Template>, settings: Map<String, Any>
     ): String = gson.toJson(mapOf(
         "accounts" to accounts, "transactions" to transactions,
         "categories" to categories, "standingOrders" to standingOrders,
-        "settings" to settings
+        "templates" to templates, "settings" to settings
     ))
 
     suspend fun importFromJson(json: String): Boolean {
@@ -227,16 +233,21 @@ class FinanzRepository(private val db: AppDatabase) {
             val standingOrders = parseList("standingOrders", StandingOrder::class.java).map { o ->
                 o.copy(splitMode = o.splitMode ?: "half")
             }
+            val templates = parseList("templates", Template::class.java).map { t ->
+                t.copy(splitMode = t.splitMode ?: "half")
+            }
 
             db.withTransaction {
                 db.accountDao().deleteAll()
                 db.transactionDao().deleteAll()
                 db.categoryDao().deleteAll()
                 db.standingOrderDao().deleteAll()
+                db.templateDao().deleteAll()
                 accounts.forEach       { db.accountDao().insert(it.toEntity()) }
                 transactions.forEach   { db.transactionDao().insert(it.toEntity()) }
                 categories.forEach     { db.categoryDao().insert(it.toEntity()) }
                 standingOrders.forEach { db.standingOrderDao().insert(it.toEntity()) }
+                templates.forEach      { db.templateDao().insert(it.toEntity()) }
             }
             true
         } catch (e: Exception) {
