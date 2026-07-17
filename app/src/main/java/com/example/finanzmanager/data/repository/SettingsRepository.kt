@@ -5,7 +5,9 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import java.util.UUID
 
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
@@ -17,15 +19,28 @@ class SettingsRepository(private val context: Context) {
         val COUNT_FULL_SPLIT_INCOME = booleanPreferencesKey("count_full_split_income")
         // Empty string = "count from all time", any "yyyy-MM-dd" = count from that date
         val SPLIT_POT_START_DATE    = stringPreferencesKey("split_pot_start_date")
+        // Schützt den lokalen Sync-Server (siehe sync/SyncServer.kt) vor Zugriffen
+        // durch andere Apps/Geräte im selben WLAN.
+        val SYNC_TOKEN               = stringPreferencesKey("sync_token")
     }
 
     val isDarkMode:          Flow<Boolean> = context.dataStore.data.map { it[DARK_MODE]               ?: true  }
     val isSplitPotEnabled:   Flow<Boolean> = context.dataStore.data.map { it[SPLIT_POT_ENABLED]       ?: true  }
     val countFullSplitIncome:Flow<Boolean> = context.dataStore.data.map { it[COUNT_FULL_SPLIT_INCOME] ?: false }
     val splitPotStartDate:   Flow<String>  = context.dataStore.data.map { it[SPLIT_POT_START_DATE]    ?: ""    }
+    val syncToken:           Flow<String>  = context.dataStore.data.map { it[SYNC_TOKEN]              ?: ""    }
 
     suspend fun setDarkMode(value: Boolean)            { context.dataStore.edit { it[DARK_MODE]               = value } }
     suspend fun setSplitPotEnabled(value: Boolean)     { context.dataStore.edit { it[SPLIT_POT_ENABLED]       = value } }
     suspend fun setCountFullSplitIncome(value: Boolean){ context.dataStore.edit { it[COUNT_FULL_SPLIT_INCOME] = value } }
     suspend fun setSplitPotStartDate(date: String)     { context.dataStore.edit { it[SPLIT_POT_START_DATE]    = date  } }
+
+    /** Erzeugt beim allerersten Aufruf einen Pairing-Code und liefert ihn danach unverändert zurück. */
+    suspend fun ensureSyncToken(): String {
+        val bestehend = context.dataStore.data.map { it[SYNC_TOKEN] }.first()
+        if (!bestehend.isNullOrEmpty()) return bestehend
+        val neu = UUID.randomUUID().toString().replace("-", "").take(10).uppercase()
+        context.dataStore.edit { it[SYNC_TOKEN] = neu }
+        return neu
+    }
 }

@@ -59,5 +59,6 @@ dependencies {
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.documentfile)
+    implementation(libs.nanohttpd)
     debugImplementation(libs.androidx.ui.tooling)
 }

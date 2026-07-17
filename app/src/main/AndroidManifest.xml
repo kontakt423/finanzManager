@@ -7,6 +7,9 @@
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
 
+    <!-- Lokaler HTTP-Server für den Taxologic-Sync (rein lesend, nur im WLAN) -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <application
         android:name=".FinanzManagerApp"
         android:allowBackup="true"

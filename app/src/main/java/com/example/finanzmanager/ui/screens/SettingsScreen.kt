@@ -28,8 +28,15 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import androidx.compose.runtime.LaunchedEffect
+import com.example.finanzmanager.data.repository.SettingsRepository
 import com.example.finanzmanager.domain.Account
 import com.example.finanzmanager.domain.Category
+import com.example.finanzmanager.sync.SyncServer
+import com.example.finanzmanager.sync.lokaleIpAdressen
 import com.example.finanzmanager.ui.FinanzViewModel
 import com.example.finanzmanager.ui.UiState
 import com.example.finanzmanager.ui.components.formatCurrency
@@ -407,6 +414,10 @@ fun SettingsScreen(
             }
         }
 
+        // ── Sync mit Taxologic ──────────────────────────────────────────────
+        item { SectionLabel("SYNC MIT TAXOLOGIC") }
+        item { SyncSection() }
+
         // ── Konten ───────────────────────────────────────────────────────────
         item {
             Row(
@@ -559,6 +570,80 @@ fun SectionLabel(text: String) {
         letterSpacing = 1.5.sp,
         modifier = Modifier.padding(top = 4.dp)
     )
+}
+
+/**
+ * Zeigt Adresse + Pairing-Code für den lokalen Sync-Server (siehe sync/SyncServer.kt)
+ * an. Taxologic trägt beide Werte manuell (oder per QR-Code) in seinem eigenen
+ * "Privat"-Modul ein und holt sich die Daten von dort aktiv ab – diese App schreibt
+ * nie etwas zurück.
+ */
+@Composable
+fun SyncSection() {
+    val context = LocalContext.current
+    var token by remember { mutableStateOf("") }
+    var ipAdressen by remember { mutableStateOf<List<String>>(emptyList()) }
+
+    LaunchedEffect(Unit) {
+        token = SettingsRepository(context).ensureSyncToken()
+        ipAdressen = lokaleIpAdressen()
+    }
+
+    val adresse = (ipAdressen.firstOrNull() ?: "—") + ":" + SyncServer.PORT
+
+    fun kopieren(label: String, wert: String) {
+        val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        cm.setPrimaryClip(ClipData.newPlainText(label, wert))
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(verticalAlignment = Alignment.Top) {
+                Icon(
+                    Icons.Default.Info, contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(15.dp).padding(top = 1.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    "Taxologic kann private Buchungen von hier abrufen (nur lesend, " +
+                    "nur im selben WLAN bzw. auf demselben Gerät). Adresse und Pairing-Code " +
+                    "dort im Bereich \"Privat\" eintragen.",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    lineHeight = 15.sp
+                )
+            }
+
+            SyncWertZeile(label = "Adresse", wert = adresse, onKopieren = { kopieren("Adresse", adresse) })
+            SyncWertZeile(label = "Pairing-Code", wert = token.ifEmpty { "…" },
+                onKopieren = { kopieren("Pairing-Code", token) })
+        }
+    }
+}
+
+@Composable
+private fun SyncWertZeile(label: String, wert: String, onKopieren: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column {
+            Text(label, fontSize = 10.sp, fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(wert, fontSize = 13.sp, fontWeight = FontWeight.Black,
+                color = MaterialTheme.colorScheme.onSurface)
+        }
+        IconButton(onClick = onKopieren) {
+            Icon(Icons.Default.ContentCopy, contentDescription = "Kopieren",
+                modifier = Modifier.size(16.dp))
+        }
+    }
 }
 
 @Composable
