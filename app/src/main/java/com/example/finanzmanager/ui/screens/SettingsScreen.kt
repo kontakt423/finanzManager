@@ -581,6 +581,17 @@ fun SyncSection() {
             SyncWertZeile(label = "Pairing-Code", wert = token.ifEmpty { "…" },
                 onKopieren = { kopieren("Pairing-Code", token) })
 
+            // Falls die geratene Adresse falsch ist (z.B. Gerät hat mehrere aktive
+            // Netzwerk-Schnittstellen): alle gefundenen Kandidaten zum manuellen
+            // Ausprobieren anzeigen.
+            if (ipAdressen.size > 1) {
+                Text(
+                    "Andere gefundene Adressen (falls obige nicht erreichbar ist): " +
+                    ipAdressen.drop(1).joinToString(", ") { "$it:${SyncServer.PORT}" },
+                    fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 14.sp
+                )
+            }
+
             val serverFehler = SyncServerStatus.fehler
             if (serverFehler != null) {
                 Text("Server-Fehler beim Start: $serverFehler",
