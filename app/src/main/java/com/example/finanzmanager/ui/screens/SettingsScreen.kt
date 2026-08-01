@@ -36,6 +36,7 @@ import com.example.finanzmanager.data.repository.SettingsRepository
 import com.example.finanzmanager.domain.Account
 import com.example.finanzmanager.domain.Category
 import com.example.finanzmanager.sync.SyncServer
+import com.example.finanzmanager.sync.SyncServerStatus
 import com.example.finanzmanager.sync.lokaleIpAdressen
 import com.example.finanzmanager.ui.FinanzViewModel
 import com.example.finanzmanager.ui.UiState
@@ -622,6 +623,16 @@ fun SyncSection() {
             SyncWertZeile(label = "Adresse", wert = adresse, onKopieren = { kopieren("Adresse", adresse) })
             SyncWertZeile(label = "Pairing-Code", wert = token.ifEmpty { "…" },
                 onKopieren = { kopieren("Pairing-Code", token) })
+
+            val serverFehler = SyncServerStatus.fehler
+            if (serverFehler != null) {
+                Text("Server-Fehler beim Start: $serverFehler",
+                    fontSize = 11.sp, color = MaterialTheme.colorScheme.error, lineHeight = 15.sp)
+            } else if (SyncServerStatus.running) {
+                Text("Server aktiv ✓", fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
+            } else {
+                Text("Server startet…", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
     }
 }

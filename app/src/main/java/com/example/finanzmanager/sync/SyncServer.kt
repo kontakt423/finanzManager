@@ -19,7 +19,14 @@ import kotlinx.coroutines.runBlocking
  * andere Geräte/Apps im selben WLAN – Taxologic zeigt denselben Mechanismus
  * bereits für seinen eigenen Geräte-Sync.
  */
-class SyncServer(private val context: Context) : NanoHTTPD(PORT) {
+/** Sichtbarer Start-Status für die Sync-Section in den Einstellungen – ohne das
+ * würde ein Startfehler nur in Logcat landen und für den Nutzer unsichtbar bleiben. */
+object SyncServerStatus {
+    @Volatile var running: Boolean = false
+    @Volatile var fehler: String? = null
+}
+
+class SyncServer(private val context: Context) : NanoHTTPD("0.0.0.0", PORT) {
 
     private val settings = SettingsRepository(context)
 

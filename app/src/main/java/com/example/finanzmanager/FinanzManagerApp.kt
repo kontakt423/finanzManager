@@ -3,6 +3,7 @@ package com.example.finanzmanager
 import android.app.Application
 import androidx.work.*
 import com.example.finanzmanager.sync.SyncServer
+import com.example.finanzmanager.sync.SyncServerStatus
 import com.example.finanzmanager.workers.StandingOrderWorker
 import java.util.concurrent.TimeUnit
 
@@ -16,9 +17,13 @@ class FinanzManagerApp : Application() {
     private fun startSyncServer() {
         try {
             SyncServer(this).start(fi.iki.elonen.NanoHTTPD.SOCKET_READ_TIMEOUT, false)
+            SyncServerStatus.running = true
         } catch (e: Exception) {
             // Port evtl. schon belegt (z.B. zweiter Prozessstart) – Sync ist optional,
-            // App darf dadurch nicht abstürzen.
+            // App darf dadurch nicht abstürzen. Fehler aber sichtbar machen (siehe
+            // SyncSection in SettingsScreen.kt), sonst bleibt ein Startfehler für den
+            // Nutzer unsichtbar und sieht wie ein Netzwerkproblem bei Taxologic aus.
+            SyncServerStatus.fehler = "${e.javaClass.simpleName}: ${e.message}"
             e.printStackTrace()
         }
     }
