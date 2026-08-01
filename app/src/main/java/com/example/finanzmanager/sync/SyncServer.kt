@@ -58,6 +58,7 @@ class SyncServer(private val context: Context) : NanoHTTPD("0.0.0.0", PORT) {
             transactions = repo.transactions.first(),
             categories = repo.categories.first(),
             standingOrders = repo.standingOrders.first(),
+            templates = repo.templates.first(),
             settings = emptyMap(),
         )
     }
