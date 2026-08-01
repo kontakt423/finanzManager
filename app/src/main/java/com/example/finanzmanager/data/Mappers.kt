@@ -17,12 +17,12 @@ fun AccountEntity.toDomain(): Account {
         val value = (map["val"] as? Double) ?: (map["val"] as? Long)?.toDouble() ?: return@mapNotNull null
         HistoryEntry(date, value)
     }
-    return Account(id, name, balance, category, type, icon, history)
+    return Account(id, name, balance, category, type, icon, history, interestRate, interestInterval, nextInterestRun)
 }
 
 fun Account.toEntity(): AccountEntity {
     val historyList = history.map { mapOf("date" to it.date, "val" to it.value) }
-    return AccountEntity(id, name, balance, category, type, icon, gson.toJson(historyList))
+    return AccountEntity(id, name, balance, category, type, icon, gson.toJson(historyList), interestRate, interestInterval, nextInterestRun)
 }
 
 fun TransactionEntity.toDomain() = Transaction(
@@ -40,4 +40,11 @@ fun StandingOrderEntity.toDomain() = StandingOrder(
 )
 fun StandingOrder.toEntity() = StandingOrderEntity(
     id, type, amount, description, categoryId, accountId, toAccountId, isSplit, splitMode, interval, nextRun
+)
+
+fun TemplateEntity.toDomain() = Template(
+    id, name, type, amount, description, categoryId, accountId, toAccountId, isSplit, splitMode
+)
+fun Template.toEntity() = TemplateEntity(
+    id, name, type, amount, description, categoryId, accountId, toAccountId, isSplit, splitMode
 )

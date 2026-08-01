@@ -10,6 +10,10 @@
     <!-- Lokaler HTTP-Server für den Taxologic-Sync (rein lesend, nur im WLAN) -->
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- Beleg-Scan per Kamera (OCR) -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera.any" android:required="false" />
+
     <application
         android:name=".FinanzManagerApp"
         android:allowBackup="true"
